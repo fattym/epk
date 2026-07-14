@@ -111,17 +111,33 @@ class RubricDescriptor(models.Model):
 
 
 class TeacherAssignment(models.Model):
+    """Explicit, queryable teacher-to-class relationship (replaces an implicit teacher FK).
+
+    Assignments are term-scoped and history-preserving: a mid-term change is a NEW row
+    (is_active=False on the old one), never an in-place edit. role drives permission scoping
+    (a class_teacher sees a learner's whole record; a subject_teacher only their learning area).
+    """
+    ROLE_CHOICES = (
+        ('subject_teacher', 'Subject Teacher'),
+        ('class_teacher', 'Class Teacher'),
+        ('assistant_teacher', 'Assistant/TA'),
+    )
     teacher = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='teacher_assignments')
-    learning_area = models.ForeignKey(LearningArea, on_delete=models.CASCADE, related_name='teacher_assignments')
+    learning_area = models.ForeignKey(LearningArea, on_delete=models.CASCADE, null=True, blank=True, related_name='teacher_assignments')
     stream = models.ForeignKey(Stream, on_delete=models.CASCADE, related_name='teacher_assignments')
+    # Nullable at DB level for migration safety; enforced as required by the API.
+    term = models.ForeignKey('Term', on_delete=models.CASCADE, null=True, blank=True, related_name='teacher_assignments')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='subject_teacher')
+    is_active = models.BooleanField(default=True)
     school = models.ForeignKey('tenants.School', on_delete=models.CASCADE, related_name='teacher_assignments')
 
     class Meta:
-        ordering = ['stream__grade__order', 'stream__name', 'learning_area__name']
-        unique_together = ['teacher', 'learning_area', 'stream']
+        ordering = ['-term__start_date', 'stream__grade__order', 'stream__name', 'role', 'learning_area__name']
+        unique_together = ['teacher', 'stream', 'learning_area', 'term']
 
     def __str__(self):
-        return f'{self.teacher} - {self.learning_area} - {self.stream}'
+        area = self.learning_area or 'Whole class'
+        return f'{self.teacher} - {self.get_role_display()} - {self.stream} - {area}'
 
 
 class ClassTeacher(models.Model):
@@ -208,3 +224,24 @@ class Term(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.academic_year})'
+
+
+class LearnerGroup(models.Model):
+    """Differentiated small groups (support clusters, reading circles, G&T clusters).
+
+    Lets a teacher bulk-assess or bulk-message a subgroup instead of always working at the
+    whole-class or single-learner level. Members are learners (accounts.User with role STUDENT).
+    """
+    school = models.ForeignKey('tenants.School', on_delete=models.CASCADE, related_name='learner_groups')
+    stream = models.ForeignKey(Stream, on_delete=models.CASCADE, related_name='groups')
+    name = models.CharField(max_length=100)
+    learning_area = models.ForeignKey(LearningArea, on_delete=models.SET_NULL, null=True, blank=True, related_name='learner_groups')
+    members = models.ManyToManyField('accounts.User', related_name='learner_groups')
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='created_learner_groups')
+
+    class Meta:
+        ordering = ['stream__grade__order', 'stream__name', 'name']
+        unique_together = ['school', 'stream', 'name']
+
+    def __str__(self):
+        return f'{self.stream} - {self.name}'

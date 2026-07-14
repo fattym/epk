@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import (
     Grade, Pathway, Stream, LearningArea, TeacherAssignment, Timetable, Term,
     Strand, SubStrand, LearningOutcome, RubricDescriptor, ClassTeacher, Enrollment, Assignment,
+    LearnerGroup,
 )
 
 
@@ -92,3 +93,10 @@ class TermSerializer(serializers.ModelSerializer):
     class Meta:
         model = Term
         fields = '__all__'
+
+
+class LearnerGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearnerGroup
+        fields = '__all__'
+        read_only_fields = ['school', 'created_by']

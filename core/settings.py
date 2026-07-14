@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'fees',
     'library',
     'messaging',
+    'clubs',
 ]
 
 MIDDLEWARE = [

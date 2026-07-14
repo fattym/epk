@@ -12,7 +12,7 @@ class ParentLearnerSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'phone', 'address', 'date_of_birth', 'school', 'created_at']
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'phone', 'address', 'date_of_birth', 'school', 'created_at', 'tsc_number', 'qualification', 'subject_specializations']
         read_only_fields = ['id', 'created_at']
 
 
@@ -21,4 +21,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'first_name', 'last_name', 'role', 'phone', 'address', 'date_of_birth', 'school']
+        fields = [
+            'email', 'password', 'first_name', 'last_name', 'role', 'phone',
+            'address', 'date_of_birth', 'school', 'tsc_number', 'qualification',
+            'subject_specializations',
+        ]

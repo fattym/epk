@@ -4,7 +4,7 @@ from .views import (
     GradeViewSet, PathwayViewSet, StreamViewSet, LearningAreaViewSet,
     StrandViewSet, SubStrandViewSet, LearningOutcomeViewSet, RubricDescriptorViewSet,
     TeacherAssignmentViewSet, ClassTeacherViewSet, EnrollmentViewSet,
-    TimetableViewSet, AssignmentViewSet, TermViewSet,
+    TimetableViewSet, AssignmentViewSet, TermViewSet, LearnerGroupViewSet,
 )
 
 router = DefaultRouter()
@@ -22,6 +22,7 @@ router.register(r'enrollments', EnrollmentViewSet)
 router.register(r'timetable', TimetableViewSet)
 router.register(r'assignments', AssignmentViewSet)
 router.register(r'terms', TermViewSet)
+router.register(r'learner-groups', LearnerGroupViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -40,6 +40,12 @@ class User(AbstractUser):
     address = models.TextField(blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     school = models.ForeignKey('tenants.School', on_delete=models.CASCADE)
+    # TSC (Teachers Service Commission) compliance — captured now, not retrofitted.
+    tsc_number = models.CharField(max_length=20, blank=True, null=True, unique=True)
+    qualification = models.CharField(max_length=200, blank=True)
+    subject_specializations = models.ManyToManyField(
+        'academics.LearningArea', related_name='specialist_teachers', blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

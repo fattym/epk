@@ -2,12 +2,13 @@ from rest_framework import viewsets, permissions
 from .models import (
     Grade, Pathway, Stream, LearningArea, TeacherAssignment, Timetable, Term,
     Strand, SubStrand, LearningOutcome, RubricDescriptor, ClassTeacher, Enrollment, Assignment,
+    LearnerGroup,
 )
 from .serializers import (
     GradeSerializer, PathwaySerializer, StreamSerializer, LearningAreaSerializer,
     StrandSerializer, SubStrandSerializer, LearningOutcomeSerializer, RubricDescriptorSerializer,
     TeacherAssignmentSerializer, ClassTeacherSerializer, EnrollmentSerializer,
-    TimetableSerializer, AssignmentSerializer, TermSerializer,
+    TimetableSerializer, AssignmentSerializer, TermSerializer, LearnerGroupSerializer,
 )
 
 
@@ -103,3 +104,11 @@ class AssignmentViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
 class TermViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Term.objects.all()
     serializer_class = TermSerializer
+
+
+class LearnerGroupViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
+    queryset = LearnerGroup.objects.all()
+    serializer_class = LearnerGroupSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(school=self.request.user.school, created_by=self.request.user)
