@@ -38,6 +38,9 @@ INSTALLED_APPS = [
     'library',
     'messaging',
     'clubs',
+    'recruitment',
+    'distributor',
+    'requirements',
 ]
 
 MIDDLEWARE = [

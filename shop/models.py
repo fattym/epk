@@ -7,12 +7,15 @@ from tenants.models import School
 class ProductCategory(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='product_categories')
     name = models.CharField(max_length=100)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='children')
 
     class Meta:
         ordering = ['name']
-        unique_together = ['school', 'name']
+        unique_together = ['school', 'name', 'parent']
 
     def __str__(self):
+        if self.parent:
+            return f'{self.school.name} - {self.parent.name} > {self.name}'
         return f'{self.school.name} - {self.name}'
 
 

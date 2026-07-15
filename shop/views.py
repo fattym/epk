@@ -7,7 +7,26 @@ from django.utils import timezone
 from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment
 from .serializers import ProductCategorySerializer, ProductSerializer, ProductVariantSerializer, OrderSerializer, OrderItemSerializer
 from fees.models import Invoice
+from distributor.models import DistributorProduct
 import uuid
+
+
+def sync_distributor_categories(school):
+    categories = DistributorProduct.objects.filter(
+        distributor__is_verified=True,
+        is_active=True,
+        category__isnull=False,
+    ).exclude(category='').values_list('category', flat=True).distinct()
+    created = 0
+    for category_name in categories:
+        obj, was_created = ProductCategory.objects.get_or_create(
+            school=school,
+            name=category_name,
+            defaults={'name': category_name},
+        )
+        if was_created:
+            created += 1
+    return created
 
 
 class ProductCategoryViewSet(viewsets.ModelViewSet):
@@ -20,6 +39,11 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
+
+    @action(detail=False, methods=['post'])
+    def sync_from_distributors(self, request):
+        created = sync_distributor_categories(request.user.school)
+        return Response({'detail': f'Synced categories from distributors.', 'created': created})
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -104,7 +128,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         if order.status != 'pending_payment':
             return Response({'detail': 'Order is not pending payment'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from fees.models import Invoice, FeeLedgerEntry
+        from fees.models import Invoice
         from academics.models import Term
 
         current_term = Term.objects.filter(school=order.school, is_current=True).first()

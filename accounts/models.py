@@ -32,6 +32,7 @@ class User(AbstractUser):
         ('STUDENT', 'Student'),
         ('PARENT', 'Parent'),
         ('STAFF', 'Staff'),
+        ('DISTRIBUTOR', 'Distributor'),
     )
     username = None
     email = models.EmailField(unique=True)
@@ -39,7 +40,7 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
-    school = models.ForeignKey('tenants.School', on_delete=models.CASCADE)
+    school = models.ForeignKey('tenants.School', on_delete=models.CASCADE, null=True, blank=True)
     # TSC (Teachers Service Commission) compliance — captured now, not retrofitted.
     tsc_number = models.CharField(max_length=20, blank=True, null=True, unique=True)
     qualification = models.CharField(max_length=200, blank=True)
