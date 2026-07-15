@@ -50,13 +50,52 @@ class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ['category', 'is_active', 'applicable_levels']
+    filterset_fields = ['category', 'is_active', 'applicable_levels', 'is_reseller_listing']
 
     def get_queryset(self):
         return Product.objects.filter(school=self.request.user.school)
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
+
+    @action(detail=False, methods=['post'])
+    def import_from_distributor(self, request):
+        distributor_product_id = request.data.get('distributor_product_id')
+        markup_type = request.data.get('markup_type', 'percentage')
+        markup_value = request.data.get('markup_value')
+        category_id = request.data.get('category_id')
+
+        if not distributor_product_id or markup_value is None:
+            return Response({'detail': 'distributor_product_id and markup_value are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        distributor_product = get_object_or_404(DistributorProduct, id=distributor_product_id, is_active=True, distributor__is_verified=True)
+
+        category = None
+        if category_id:
+            from .models import ProductCategory
+            category = get_object_or_404(ProductCategory, id=category_id, school=request.user.school)
+        else:
+            from .models import ProductCategory
+            category, _ = ProductCategory.objects.get_or_create(
+                school=request.user.school,
+                name=distributor_product.category or 'Imported',
+            )
+
+        product = Product(
+            school=request.user.school,
+            category=category,
+            name=distributor_product.name,
+            description=distributor_product.description,
+            linked_distributor_product=distributor_product,
+            markup_type=markup_type,
+            markup_value=markup_value,
+            is_reseller_listing=True,
+        )
+        product.save()
+        product.applicable_levels.set([])
+
+        serializer = self.get_serializer(product)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ProductVariantViewSet(viewsets.ModelViewSet):

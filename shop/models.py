@@ -2,6 +2,7 @@ from django.db import models
 from accounts.models import User
 from academics.models import Grade
 from tenants.models import School
+from distributor.models import DistributorProduct
 
 
 class ProductCategory(models.Model):
@@ -20,6 +21,10 @@ class ProductCategory(models.Model):
 
 
 class Product(models.Model):
+    MARKUP_TYPE_CHOICES = (
+        ('percentage', 'Percentage'),
+        ('fixed', 'Fixed Amount'),
+    )
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='products')
     category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=200)
@@ -28,6 +33,11 @@ class Product(models.Model):
     image = models.ImageField(upload_to='shop/products/%Y/', blank=True, null=True)
     applicable_levels = models.ManyToManyField(Grade, blank=True, related_name='products')
     is_active = models.BooleanField(default=True)
+    linked_distributor_product = models.ForeignKey(DistributorProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name='school_listings')
+    markup_type = models.CharField(max_length=20, choices=MARKUP_TYPE_CHOICES, null=True, blank=True)
+    markup_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    is_reseller_listing = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -35,6 +45,21 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.linked_distributor_product and self.markup_type and self.markup_value is not None:
+            base_price = self.linked_distributor_product.unit_price
+            if self.markup_type == 'percentage':
+                self.price = base_price * (1 + self.markup_value / 100)
+                self.commission_amount = self.price - base_price
+            else:
+                self.price = base_price + self.markup_value
+                self.commission_amount = self.markup_value
+        super().save(*args, **kwargs)
+
+    @property
+    def effective_price(self):
+        return self.price
 
 
 class ProductVariant(models.Model):

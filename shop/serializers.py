@@ -12,11 +12,13 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, read_only=True)
     effective_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    linked_distributor_product_name = serializers.CharField(source='linked_distributor_product.name', read_only=True)
+    distributor_price = serializers.DecimalField(source='linked_distributor_product.unit_price', max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Product
-        fields = ['id', 'school', 'category', 'name', 'description', 'price', 'effective_price', 'image', 'applicable_levels', 'is_active', 'created_at', 'variants']
-        read_only_fields = ['id', 'created_at', 'school']
+        fields = ['id', 'school', 'category', 'name', 'description', 'price', 'effective_price', 'image', 'applicable_levels', 'is_active', 'created_at', 'variants', 'linked_distributor_product', 'linked_distributor_product_name', 'distributor_price', 'markup_type', 'markup_value', 'commission_amount', 'is_reseller_listing']
+        read_only_fields = ['id', 'created_at', 'school', 'effective_price', 'linked_distributor_product_name', 'distributor_price', 'commission_amount']
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
