@@ -41,6 +41,12 @@ INSTALLED_APPS = [
     'recruitment',
     'distributor',
     'requirements',
+    'complaints',
+    'events',
+    'homework',
+    'reports',
+    'notices',
+    'courses',
 ]
 
 MIDDLEWARE = [

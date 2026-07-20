@@ -1,4 +1,6 @@
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import (
     Grade, Pathway, Stream, LearningArea, TeacherAssignment, Timetable, Term,
     Strand, SubStrand, LearningOutcome, RubricDescriptor, ClassTeacher, Enrollment, Assignment,
@@ -67,6 +69,44 @@ class TeacherAssignmentViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
+
+    @action(detail=False, methods=['get'])
+    def my_teachers(self, request):
+        user = request.user
+        student_id = request.query_params.get('student_id')
+
+        if user.role == 'PARENT':
+            from accounts.models import ParentLearner
+            if student_id:
+                if not ParentLearner.objects.filter(parent=user, learner_id=student_id).exists():
+                    return Response({'detail': 'Not authorized.'}, status=403)
+                enrollments = Enrollment.objects.filter(student_id=student_id, is_active=True)
+            else:
+                learner_ids = ParentLearner.objects.filter(parent=user).values_list('learner_id', flat=True)
+                enrollments = Enrollment.objects.filter(student_id__in=learner_ids, is_active=True)
+        elif user.role == 'STUDENT':
+            enrollments = Enrollment.objects.filter(student=user, is_active=True)
+        else:
+            return Response({'detail': 'Not applicable.'}, status=400)
+
+        stream_ids = enrollments.values_list('stream_id', flat=True)
+        assignments = self.get_queryset().filter(stream_id__in=stream_ids, is_active=True)
+        serializer = self.get_serializer(assignments, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def my_students(self, request):
+        user = request.user
+        if user.role != 'TEACHER':
+            return Response({'detail': 'Only teachers can access this.'}, status=403)
+            
+        assignments = self.get_queryset().filter(teacher=user, is_active=True)
+        stream_ids = assignments.values_list('stream_id', flat=True)
+        enrollments = Enrollment.objects.filter(stream_id__in=stream_ids, is_active=True)
+        
+        serializer = EnrollmentSerializer(enrollments, many=True)
+        return Response(serializer.data)
+
 
 
 class ClassTeacherViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):

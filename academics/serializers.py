@@ -24,10 +24,35 @@ class StreamSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class LearningOutcomeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearningOutcome
+        fields = ['id', 'description']
+
+
+class SubStrandSerializer(serializers.ModelSerializer):
+    outcomes = LearningOutcomeSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SubStrand
+        fields = ['id', 'name', 'outcomes']
+
+
+class StrandSerializer(serializers.ModelSerializer):
+    sub_strands = SubStrandSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Strand
+        fields = ['id', 'name', 'sub_strands']
+
+
 class LearningAreaSerializer(serializers.ModelSerializer):
+    strands = StrandSerializer(many=True, read_only=True)
+    sub_strands = SubStrandSerializer(many=True, read_only=True)
+
     class Meta:
         model = LearningArea
-        fields = '__all__'
+        fields = ['id', 'name', 'code', 'grade', 'pathway', 'school', 'strands', 'sub_strands']
 
 
 class StrandSerializer(serializers.ModelSerializer):
@@ -55,6 +80,11 @@ class RubricDescriptorSerializer(serializers.ModelSerializer):
 
 
 class TeacherAssignmentSerializer(serializers.ModelSerializer):
+    teacher_name = serializers.CharField(source='teacher.get_full_name', read_only=True)
+    teacher_email = serializers.CharField(source='teacher.email', read_only=True)
+    learning_area_name = serializers.CharField(source='learning_area.name', read_only=True)
+    stream_name = serializers.CharField(source='stream.name', read_only=True)
+
     class Meta:
         model = TeacherAssignment
         fields = '__all__'

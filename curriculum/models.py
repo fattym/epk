@@ -58,6 +58,8 @@ class SchemeWeek(models.Model):
     learning_resources = models.TextField(blank=True)
     assessment_method = models.TextField(blank=True)
     reflection = models.TextField(blank=True)
+    course = models.ForeignKey('courses.Course', on_delete=models.SET_NULL, null=True, blank=True, related_name='scheme_weeks')
+    lesson = models.ForeignKey('courses.Lesson', on_delete=models.SET_NULL, null=True, blank=True, related_name='scheme_weeks')
 
     class Meta:
         ordering = ['week_number']

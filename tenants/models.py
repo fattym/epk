@@ -29,6 +29,7 @@ class SchoolSettings(models.Model):
     date_format = models.CharField(max_length=20, default='YYYY-MM-DD')
     allow_parent_portal = models.BooleanField(default=True)
     allow_student_portal = models.BooleanField(default=True)
+    requires_course_review = models.BooleanField(default=False)
 
     def __str__(self):
         return f'{self.school.name} Settings'
