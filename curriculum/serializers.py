@@ -28,3 +28,7 @@ class SchemeGenerateSerializer(serializers.Serializer):
     learning_area = serializers.IntegerField()
     term = serializers.IntegerField()
     stream = serializers.IntegerField()
+
+
+class SchemeUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

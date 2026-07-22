@@ -16,9 +16,10 @@ from .serializers import (
 
 class SchoolScopedViewSetMixin:
     permission_classes = [permissions.IsAuthenticated]
+    school_filter_field = 'school'
 
     def get_queryset(self):
-        return self.queryset.model.objects.filter(school=self.request.user.school)
+        return self.queryset.model.objects.filter(**{self.school_filter_field: self.request.user.school})
 
 
 class GradeViewSet(viewsets.ModelViewSet):
@@ -46,21 +47,25 @@ class LearningAreaViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
 class StrandViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Strand.objects.all()
     serializer_class = StrandSerializer
+    school_filter_field = 'learning_area__school'
 
 
 class SubStrandViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = SubStrand.objects.all()
     serializer_class = SubStrandSerializer
+    school_filter_field = 'strand__learning_area__school'
 
 
 class LearningOutcomeViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = LearningOutcome.objects.all()
     serializer_class = LearningOutcomeSerializer
+    school_filter_field = 'sub_strand__strand__learning_area__school'
 
 
 class RubricDescriptorViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = RubricDescriptor.objects.all()
     serializer_class = RubricDescriptorSerializer
+    school_filter_field = 'outcome__sub_strand__strand__learning_area__school'
 
 
 class TeacherAssignmentViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):

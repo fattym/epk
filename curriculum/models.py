@@ -35,6 +35,7 @@ class SchemeOfWork(models.Model):
     term = models.ForeignKey(Term, on_delete=models.CASCADE, related_name='schemes')
     stream = models.ForeignKey(Stream, on_delete=models.CASCADE, related_name='schemes')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    file = models.FileField(upload_to='scheme_uploads/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     school = models.ForeignKey('tenants.School', on_delete=models.CASCADE, related_name='schemes')
@@ -50,6 +51,7 @@ class SchemeOfWork(models.Model):
 class SchemeWeek(models.Model):
     scheme = models.ForeignKey(SchemeOfWork, on_delete=models.CASCADE, related_name='weeks')
     week_number = models.PositiveSmallIntegerField()
+    lesson_number = models.PositiveSmallIntegerField(default=1)
     strand = models.ForeignKey(Strand, on_delete=models.CASCADE, related_name='scheme_weeks')
     sub_strand = models.ForeignKey(SubStrand, on_delete=models.CASCADE, related_name='scheme_weeks')
     specific_learning_outcomes = models.TextField()
@@ -66,3 +68,20 @@ class SchemeWeek(models.Model):
 
     def __str__(self):
         return f'Week {self.week_number} - {self.sub_strand}'
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.course and self.sub_strand:
+            from courses.models import Topic
+            Topic.objects.update_or_create(
+                course=self.course,
+                scheme_entry=self,
+                defaults={
+                    'title': self.sub_strand.name,
+                    'week': self.week_number,
+                    'order': self.week_number,
+                    'school': self.scheme.school,
+                    'learning_area': self.scheme.learning_area,
+                    'learning_outcomes': self.specific_learning_outcomes,
+                }
+            )

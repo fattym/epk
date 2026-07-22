@@ -1,8 +1,9 @@
 from django.db import models
 from django.utils import timezone
 from accounts.models import User
-from academics.models import LearningArea, SubStrand, Stream
+from academics.models import LearningArea, SubStrand, Stream, Grade, Term
 from tenants.models import School
+
 
 class Course(models.Model):
     STATUS_CHOICES = (
@@ -19,18 +20,32 @@ class Course(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='courses')
     learning_area = models.ForeignKey(LearningArea, on_delete=models.CASCADE, related_name='courses')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='authored_courses')
-    
+    teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='taught_courses')
+
+    grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses')
+    stream = models.ForeignKey(Stream, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses')
+    term = models.ForeignKey(Term, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses')
+    year = models.CharField(max_length=10, blank=True, help_text="Academic year, e.g. 2026")
+
     title = models.CharField(max_length=255, blank=True, default='Untitled Course')
     description = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='draft')
     delivery_mode = models.CharField(max_length=20, choices=DELIVERY_MODE_CHOICES, default='blended')
-    
+
     available_from = models.DateTimeField(null=True, blank=True)
     requires_parent_unlock = models.BooleanField(default=False)
-    
+
+    section = models.CharField(max_length=50, blank=True, help_text="e.g. Section A, Group 1")
+    room = models.CharField(max_length=100, blank=True, help_text="Physical room or virtual link")
+    course_code = models.CharField(max_length=20, blank=True, null=True, unique=True, help_text="Short code for students to join")
+    allow_student_posts = models.BooleanField(default=False, help_text="Allow students to post in the class stream")
+    core_competencies = models.JSONField(default=list, blank=True)
+    values = models.JSONField(default=list, blank=True)
+    pcis = models.JSONField(default=list, blank=True)
+
     cloned_from = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='clones')
     version = models.PositiveIntegerField(default=1)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -38,21 +53,41 @@ class Course(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.title} (v{self.version})"
+        parts = []
+        if self.grade and self.stream:
+            parts.append(f"{self.grade.name}{self.stream.name}")
+        elif self.stream:
+            parts.append(str(self.stream))
+        if self.learning_area:
+            parts.append(self.learning_area.name)
+        if self.term:
+            parts.append(self.term.name)
+        return " - ".join(parts) if parts else f"{self.title} (v{self.version})"
+
+    def save(self, *args, **kwargs):
+        if not self.course_code:
+            import random, string
+            self.course_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        super().save(*args, **kwargs)
 
 
 class Topic(models.Model):
-    learning_area = models.ForeignKey(LearningArea, on_delete=models.CASCADE, related_name='topics')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='topics', null=True, blank=True)
+    scheme_entry = models.ForeignKey('curriculum.SchemeWeek', on_delete=models.SET_NULL, null=True, blank=True, related_name='topics')
     title = models.CharField(max_length=255)
+    week = models.PositiveIntegerField(default=0)
     order = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=False)
+    learning_area = models.ForeignKey(LearningArea, on_delete=models.SET_NULL, null=True, blank=True, related_name='topics')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='topics')
+    sub_strand = models.ForeignKey(SubStrand, on_delete=models.SET_NULL, null=True, blank=True, related_name='topics')
+    learning_outcomes = models.TextField(blank=True, help_text="Objectives copied from the scheme of work")
 
     class Meta:
-        ordering = ['learning_area', 'order']
+        ordering = ['course', 'week', 'order']
 
     def __str__(self):
-        return f"{self.learning_area.name} - {self.title}"
+        return f"{self.course} - {self.title}"
 
 
 class Lesson(models.Model):
@@ -182,3 +217,77 @@ class LessonComment(models.Model):
 
     class Meta:
         ordering = ['created_at']
+
+
+class Post(models.Model):
+    TYPE_CHOICES = (
+        ('assignment', 'Assignment'),
+        ('material', 'Material'),
+        ('question', 'Question'),
+    )
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='posts')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='posts', null=True, blank=True)
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_posts')
+    content = models.TextField()
+    post_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='material')
+    title = models.CharField(max_length=255, blank=True)
+    due_date = models.DateTimeField(null=True, blank=True)
+    attachments = models.JSONField(blank=True, default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='posts')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_post_type_display()} - {self.course}"
+
+
+class PostComment(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='post_comments')
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='post_comments')
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.user} on {self.post}"
+
+
+class Assignment(models.Model):
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='assignments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='assignments')
+    title = models.CharField(max_length=255)
+    instructions = models.TextField()
+    due_date = models.DateTimeField(null=True, blank=True)
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assignments')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='course_assignments')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-due_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.title} - {self.course}"
+
+
+class Submission(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submissions')
+    answer = models.TextField(blank=True)
+    file = models.FileField(upload_to='submissions/%Y/%m/', blank=True, null=True)
+    score = models.PositiveIntegerField(null=True, blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    graded_at = models.DateTimeField(null=True, blank=True)
+    graded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='graded_submissions')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='submissions')
+
+    class Meta:
+        ordering = ['-submitted_at']
+        unique_together = ['assignment', 'student']
+
+    def __str__(self):
+        return f"{self.student} - {self.assignment}"
