@@ -5,6 +5,7 @@ from .views import (
     StrandViewSet, SubStrandViewSet, LearningOutcomeViewSet, RubricDescriptorViewSet,
     TeacherAssignmentViewSet, ClassTeacherViewSet, EnrollmentViewSet,
     TimetableViewSet, AssignmentViewSet, TermViewSet, LearnerGroupViewSet,
+    AITeacherAssistView,
 )
 
 router = DefaultRouter()
@@ -25,5 +26,6 @@ router.register(r'terms', TermViewSet)
 router.register(r'learner-groups', LearnerGroupViewSet)
 
 urlpatterns = [
+    path('ai-assist/', AITeacherAssistView.as_view(), name='ai-assist'),
     path('', include(router.urls)),
 ]
