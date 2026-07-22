@@ -227,6 +227,31 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             updated += 1
         return Response({'updated': updated, 'month': month, 'year': year})
 
+    @action(detail=False, methods=['get'])
+    def students_for_stream(self, request):
+        user = request.user
+        stream_id = request.query_params.get('stream')
+        if not stream_id:
+            return Response({'detail': 'stream query param is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        from academics.models import Stream
+        try:
+            stream = Stream.objects.get(id=stream_id, school=user.school)
+        except Stream.DoesNotExist:
+            return Response({'detail': 'Stream not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.role == 'TEACHER':
+            if not TeacherAssignment.objects.filter(teacher=user, stream=stream, is_active=True).exists():
+                return Response({'detail': 'You are not assigned to this stream.'}, status=status.HTTP_403_FORBIDDEN)
+        enrollments = Enrollment.objects.filter(stream=stream, is_active=True).select_related('student')
+        data = []
+        for e in enrollments:
+            data.append({
+                'id': e.student.id,
+                'student_id': e.student.student_profile.admission_number if hasattr(e.student, 'student_profile') and e.student.student_profile else '',
+                'name': f"{e.student.first_name or ''} {e.student.last_name or ''}".strip() or e.student.email,
+                'email': e.student.email,
+            })
+        return Response(data)
+
 
 class AttendanceSummaryViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceSummarySerializer
