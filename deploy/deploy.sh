@@ -88,8 +88,9 @@ echo "[5/9] Configuring environment..."
 
 # Generate a random secret key if not set
 if [ ! -f "${PROJECT_DIR}/.env" ]; then
+    _SECRET_KEY=$(python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())' 2>/dev/null || openssl rand -hex 32)
     cat > "${PROJECT_DIR}/.env" << EOF
-SECRET_KEY=$(python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')
+SECRET_KEY=${_SECRET_KEY}
 DB_ENGINE=django.db.backends.postgresql
 DB_NAME=school_mgmt
 DB_USER=school_user
