@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'CHANGE-ME-IN-PRODUCTION')
 
@@ -117,7 +117,9 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'frontend' / 'codingclubskenya' / 'dist']
+
+_frontend_dist = BASE_DIR.parent / 'frontend' / 'codingclubskenya' / 'dist'
+STATICFILES_DIRS = [str(_frontend_dist)] if _frontend_dist.exists() else []
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
