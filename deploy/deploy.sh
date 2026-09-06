@@ -94,7 +94,7 @@ DB_ENGINE=django.db.backends.postgresql
 DB_NAME=school_mgmt
 DB_USER=school_user
 DB_PASSWORD=GENERATED_ON_SERVER
-DB_HOST=localhost
+DB_HOST=127.0.0.1
 DB_PORT=5432
 ALLOWED_HOSTS=${DOMAIN},www.${DOMAIN},localhost
 CORS_ALLOWED_ORIGINS=https://${DOMAIN},https://www.${DOMAIN}
@@ -121,25 +121,25 @@ cp "${PROJECT_DIR}/backend/gunicorn.conf.py" "${PROJECT_DIR}/gunicorn.conf.py"
 
 # ---- 6. Copy systemd service files ----
 echo "[6/9] Setting up systemd services..."
-cp "${PROJECT_DIR}/deploy/gunicorn.service" /etc/systemd/system/gunicorn.service
+cp "${PROJECT_DIR}/deploy/epk.service" /etc/systemd/system/epk.service
 cp "${PROJECT_DIR}/deploy/celery.service" /etc/systemd/system/celery.service
 cp "${PROJECT_DIR}/deploy/celery-beat.service" /etc/systemd/system/celery-beat.service
 
 # Update paths in service files
-sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/gunicorn.service
+sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/epk.service
 sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/celery.service
 sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/celery-beat.service
 
 # Update user in service files
-sed -i "s|User=school|User=$USER|g" /etc/systemd/system/gunicorn.service
-sed -i "s|Group=school|Group=$USER|g" /etc/systemd/system/gunicorn.service
+sed -i "s|User=devops|User=$USER|g" /etc/systemd/system/epk.service
+sed -i "s|Group=devops|Group=$USER|g" /etc/systemd/system/epk.service
 sed -i "s|User=school|User=$USER|g" /etc/systemd/system/celery.service
 sed -i "s|Group=school|Group=$USER|g" /etc/systemd/system/celery.service
 sed -i "s|User=school|User=$USER|g" /etc/systemd/system/celery-beat.service
 sed -i "s|Group=school|Group=$USER|g" /etc/systemd/system/celery-beat.service
 
 systemctl daemon-reload
-systemctl enable gunicorn celery celery-beat
+systemctl enable epk celery celery-beat
 systemctl start redis-server
 
 # ---- 7. Django migrations & static files ----
