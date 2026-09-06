@@ -17,8 +17,8 @@ set -e
 
 DOMAIN=${1:-yourdomain.com}
 EMAIL=${2:-admin@yourdomain.com}
-PROJECT_DIR="/var/www/school_backend"
-FRONTEND_DIR="/var/www/school_frontend"
+PROJECT_DIR=${PROJECT_DIR:-"/var/www/school_backend"}
+FRONTEND_DIR=${FRONTEND_DIR:-"/var/www/school_frontend"}
 GUNICORN_LOG_DIR="/var/log/gunicorn"
 VENV_DIR="${PROJECT_DIR}/venv"
 
@@ -56,7 +56,7 @@ chown -R $USER:$USER "${PROJECT_DIR}"
 # If this is a fresh deploy, clone from git
 if [ ! -d "${PROJECT_DIR}/backend" ]; then
     echo "Cloning repository..."
-    git clone https://github.com/YOUR_USERNAME/school-management.git "${PROJECT_DIR}/tmp_clone"
+    git clone https://github.com/fattym/epk.git "${PROJECT_DIR}/tmp_clone"
     cp -r "${PROJECT_DIR}/tmp_clone/backend" "${PROJECT_DIR}/backend"
     cp -r "${PROJECT_DIR}/tmp_clone/frontend/codingclubskenya" "${PROJECT_DIR}/frontend_app"
     rm -rf "${PROJECT_DIR}/tmp_clone"
@@ -74,11 +74,6 @@ pip install --upgrade pip
 
 # Install Python dependencies
 pip install -r "${PROJECT_DIR}/backend/requirements.txt"
-pip install -r "${PROJECT_DIR}/backend/venv_requirements.txt" 2>/dev/null || \
-    pip install Django==6.0.7 djangorestframework==3.17.1 \
-    djangorestframework-simplejwt==5.5.1 django-filter==26.1.0 \
-    django-cors-headers==4.9.0 drf-spectacular==0.30.0 \
-    celery==5.6.3 redis==8.0.1 psycopg2-binary==2.9.10
 
 # ---- 5. Environment configuration ----
 echo "[5/9] Configuring environment..."
