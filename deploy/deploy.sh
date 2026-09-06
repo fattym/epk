@@ -35,7 +35,15 @@ apt-get install -y \
     redis-server \
     nginx \
     git \
+    curl \
     certbot python3-certbot-nginx
+
+# Install Node.js 20+ (required by Vite 8)
+if ! command -v node &> /dev/null || node --version | grep -q "v18\." || [ "$(node -p "require('process').versions.node.split('.')[0]')" -lt 20 ]; then
+    echo "Installing Node.js 20..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+fi
 
 # ---- 2. Setup PostgreSQL ----
 echo "[2/9] Setting up PostgreSQL..."
