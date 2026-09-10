@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+from datetime import time
 
 
 class Grade(models.Model):
@@ -111,12 +113,6 @@ class RubricDescriptor(models.Model):
 
 
 class TeacherAssignment(models.Model):
-    """Explicit, queryable teacher-to-class relationship (replaces an implicit teacher FK).
-
-    Assignments are term-scoped and history-preserving: a mid-term change is a NEW row
-    (is_active=False on the old one), never an in-place edit. role drives permission scoping
-    (a class_teacher sees a learner's whole record; a subject_teacher only their learning area).
-    """
     ROLE_CHOICES = (
         ('subject_teacher', 'Subject Teacher'),
         ('class_teacher', 'Class Teacher'),
@@ -125,7 +121,6 @@ class TeacherAssignment(models.Model):
     teacher = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='teacher_assignments')
     learning_area = models.ForeignKey(LearningArea, on_delete=models.CASCADE, null=True, blank=True, related_name='teacher_assignments')
     stream = models.ForeignKey(Stream, on_delete=models.CASCADE, related_name='teacher_assignments')
-    # Nullable at DB level for migration safety; enforced as required by the API.
     term = models.ForeignKey('Term', on_delete=models.CASCADE, null=True, blank=True, related_name='teacher_assignments')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='subject_teacher')
     is_active = models.BooleanField(default=True)
@@ -167,6 +162,55 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f'{self.student} - {self.stream}'
+
+
+class TimetableConfig(models.Model):
+    """Configuration for school timetable settings."""
+    school = models.ForeignKey('tenants.School', on_delete=models.CASCADE, related_name='timetable_config')
+    school_start_time = models.TimeField(default=time(8, 0))
+    school_end_time = models.TimeField(default=time(15, 30))
+    lecture_duration_minutes = models.PositiveIntegerField(default=45)
+    working_days = models.JSONField(default=list, blank=True)
+    breaks = models.JSONField(default=list, blank=True)
+    academic_year = models.CharField(max_length=20, default=str(timezone.now().year))
+
+    class Meta:
+        ordering = ['school']
+        unique_together = ['school']
+
+    def __str__(self):
+        return f"Timetable Config for {self.school}"
+
+
+class TimetableSlot(models.Model):
+    """Individual slot in a stream's timetable for a specific day."""
+    DAY_CHOICES = (
+        ('MONDAY', 'Monday'),
+        ('TUESDAY', 'Tuesday'),
+        ('WEDNESDAY', 'Wednesday'),
+        ('THURSDAY', 'Thursday'),
+        ('FRIDAY', 'Friday'),
+        ('SATURDAY', 'Saturday'),
+        ('SUNDAY', 'Sunday'),
+    )
+    
+    school = models.ForeignKey('tenants.School', on_delete=models.CASCADE, related_name='timetable_slots')
+    stream = models.ForeignKey(Stream, on_delete=models.CASCADE, related_name='timetable_slots')
+    day_of_week = models.CharField(max_length=10, choices=DAY_CHOICES)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    subject = models.ForeignKey(LearningArea, on_delete=models.SET_NULL, null=True, blank=True)
+    teacher = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True)
+    is_break = models.BooleanField(default=False)
+    break_name = models.CharField(max_length=100, blank=True)
+    room = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        ordering = ['day_of_week', 'start_time']
+        unique_together = ['school', 'stream', 'day_of_week', 'start_time']
+
+    def __str__(self):
+        return f"{self.stream} - {self.day_of_week} - {self.start_time} to {self.end_time}"
 
 
 class Timetable(models.Model):

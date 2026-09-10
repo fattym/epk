@@ -5,6 +5,7 @@ from .views import (
     StrandViewSet, SubStrandViewSet, LearningOutcomeViewSet, RubricDescriptorViewSet,
     TeacherAssignmentViewSet, ClassTeacherViewSet, EnrollmentViewSet,
     TimetableViewSet, AssignmentViewSet, TermViewSet, LearnerGroupViewSet,
+    TimetableConfigViewSet, TimetableSlotViewSet,
     AITeacherAssistView,
 )
 
@@ -21,11 +22,14 @@ router.register(r'teacher-assignments', TeacherAssignmentViewSet)
 router.register(r'class-teachers', ClassTeacherViewSet)
 router.register(r'enrollments', EnrollmentViewSet)
 router.register(r'timetable', TimetableViewSet)
+router.register(r'timetable-config', TimetableConfigViewSet)
+router.register(r'timetable-slot', TimetableSlotViewSet)
 router.register(r'assignments', AssignmentViewSet)
 router.register(r'terms', TermViewSet)
 router.register(r'learner-groups', LearnerGroupViewSet)
 
 urlpatterns = [
     path('ai-assist/', AITeacherAssistView.as_view(), name='ai-assist'),
+    path('timetable/generate/', TimetableViewSet.as_view({'post': 'generate_timetable'}), name='timetable-generate'),
     path('', include(router.urls)),
 ]

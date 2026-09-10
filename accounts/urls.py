@@ -1,11 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, CustomTokenObtainPairView, ParentLearnerViewSet, StudentLoginView
+from .views import UserViewSet, CustomTokenObtainPairView, ParentLearnerViewSet, StudentLoginView, TeacherLeaveViewSet
 from rest_framework_simplejwt.views import TokenRefreshView
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'parent-learner-links', ParentLearnerViewSet, basename='parent-learner-links')
+router.register(r'teacher-leaves', TeacherLeaveViewSet, basename='teacher-leaves')
 
 urlpatterns = [
     path('', include(router.urls)),

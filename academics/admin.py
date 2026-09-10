@@ -3,6 +3,7 @@ from .models import (
     Grade, Pathway, Stream, LearningArea,
     Strand, SubStrand, LearningOutcome, RubricDescriptor,
     TeacherAssignment, ClassTeacher, Enrollment, Timetable, Assignment, Term,
+    LearnerGroup, TimetableConfig, TimetableSlot,
 )
 
 @admin.register(Grade)
@@ -85,3 +86,23 @@ class TermAdmin(admin.ModelAdmin):
     list_display = ['name', 'academic_year', 'start_date', 'end_date', 'school', 'is_current']
     list_filter = ['academic_year', 'is_current', 'school']
     search_fields = ['name', 'academic_year']
+
+
+@admin.register(LearnerGroup)
+class LearnerGroupAdmin(admin.ModelAdmin):
+    list_display = ['name', 'stream', 'school']
+    list_filter = ['school', 'stream']
+    search_fields = ['name', 'stream__name']
+
+
+@admin.register(TimetableConfig)
+class TimetableConfigAdmin(admin.ModelAdmin):
+    list_display = ['school', 'school_start_time', 'school_end_time', 'lecture_duration_minutes', 'academic_year']
+    list_filter = ['school']
+
+
+@admin.register(TimetableSlot)
+class TimetableSlotAdmin(admin.ModelAdmin):
+    list_display = ['stream', 'day_of_week', 'start_time', 'end_time', 'subject', 'teacher', 'is_break', 'school']
+    list_filter = ['day_of_week', 'is_break', 'school']
+    search_fields = ['stream__name', 'subject__name', 'teacher__email']

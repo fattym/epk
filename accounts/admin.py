@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, ParentLearner, StudentProfile, TeacherProfile
+from .models import User, ParentLearner, StudentProfile, TeacherProfile, TeacherLeave
 
 
 class StudentProfileInline(admin.StackedInline):
@@ -50,3 +50,10 @@ class TeacherProfileAdmin(admin.ModelAdmin):
     list_display = ['user', 'employee_id', 'national_id', 'school']
     search_fields = ['user__email', 'employee_id', 'national_id']
     list_filter = ['school']
+
+
+@admin.register(TeacherLeave)
+class TeacherLeaveAdmin(admin.ModelAdmin):
+    list_display = ['teacher', 'leave_type', 'start_date', 'end_date', 'number_of_days', 'approval_status', 'school']
+    list_filter = ['leave_type', 'approval_status', 'school']
+    search_fields = ['teacher__email']

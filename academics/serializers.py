@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Grade, Pathway, Stream, LearningArea, TeacherAssignment, Timetable, Term,
     Strand, SubStrand, LearningOutcome, RubricDescriptor, ClassTeacher, Enrollment, Assignment,
-    LearnerGroup,
+    LearnerGroup, TimetableConfig, TimetableSlot
 )
 
 
@@ -108,6 +108,20 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 class TimetableSerializer(serializers.ModelSerializer):
     class Meta:
         model = Timetable
+        fields = '__all__'
+        read_only_fields = ['school']
+
+
+class TimetableConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TimetableConfig
+        fields = '__all__'
+        read_only_fields = ['school']
+
+
+class TimetableSlotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TimetableSlot
         fields = '__all__'
         read_only_fields = ['school']
 

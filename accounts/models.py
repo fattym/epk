@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.utils import timezone
 
 
 class UserManager(BaseUserManager):
@@ -143,3 +144,57 @@ class TeacherProfile(models.Model):
 
     def __str__(self):
         return f"Teacher Profile: {self.user.email}"
+
+
+class TeacherLeave(models.Model):
+    """Leave request for a teacher with approval workflow."""
+    
+    LEAVE_TYPE_CHOICES = (
+        ('SICK', 'Sick Leave'),
+        ('ANNUAL', 'Annual Leave'),
+        ('CASUAL', 'Casual Leave'),
+        ('MATERNITY', 'Maternity Leave'),
+        ('STUDY', 'Study Leave'),
+        ('OTHER', 'Other'),
+    )
+    
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('CANCELLED', 'Cancelled'),
+    )
+    
+    teacher = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='teacher_leaves',
+    )
+    leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES, default='ANNUAL')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    number_of_days = models.PositiveIntegerField(default=1)
+    reason = models.TextField()
+    supporting_document = models.URLField(blank=True)
+    approval_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_leaves',
+    )
+    approval_date = models.DateTimeField(null=True, blank=True)
+    school = models.ForeignKey(
+        'tenants.School',
+        on_delete=models.CASCADE,
+        related_name='teacher_leaves',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.teacher.email} - {self.leave_type} ({self.start_date} to {self.end_date})"

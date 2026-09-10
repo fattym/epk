@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, ParentLearner, StudentProfile, TeacherProfile
+from .models import User, ParentLearner, StudentProfile, TeacherProfile, TeacherLeave
 
 
 class ParentLearnerSerializer(serializers.ModelSerializer):
@@ -19,6 +19,13 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeacherProfile
         exclude = ['user', 'school']
+
+
+class TeacherLeaveSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeacherLeave
+        fields = '__all__'
+        read_only_fields = ['school', 'created_at', 'updated_at', 'approval_date']
 
 
 class UserSerializer(serializers.ModelSerializer):

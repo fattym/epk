@@ -12,13 +12,14 @@ import urllib.error
 from .models import (
     Grade, Pathway, Stream, LearningArea, TeacherAssignment, Timetable, Term,
     Strand, SubStrand, LearningOutcome, RubricDescriptor, ClassTeacher, Enrollment, Assignment,
-    LearnerGroup,
+    LearnerGroup, TimetableConfig, TimetableSlot
 )
 from .serializers import (
     GradeSerializer, PathwaySerializer, StreamSerializer, LearningAreaSerializer,
     StrandSerializer, SubStrandSerializer, LearningOutcomeSerializer, RubricDescriptorSerializer,
     TeacherAssignmentSerializer, ClassTeacherSerializer, EnrollmentSerializer,
     TimetableSerializer, AssignmentSerializer, TermSerializer, LearnerGroupSerializer,
+    TimetableConfigSerializer, TimetableSlotSerializer
 )
 
 
@@ -121,7 +122,6 @@ class TeacherAssignmentViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-
 class ClassTeacherViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = ClassTeacher.objects.all()
     serializer_class = ClassTeacherSerializer
@@ -142,6 +142,314 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Timetable.objects.all()
     serializer_class = TimetableSerializer
 
+    def perform_create(self, serializer):
+        serializer.save(school=self.request.user.school)
+
+    @action(detail=False, methods=['post'], url_path='generate')
+    def generate_timetable(self, request):
+        """
+        Auto-generate a timetable for all streams in the school based on TimetableConfig.
+        """
+        try:
+            school = request.user.school
+            
+            # Get or create TimetableConfig
+            config, created = TimetableConfig.objects.get_or_create(
+                school=school,
+                defaults={
+                    'school_start_time': '08:00:00',
+                    'school_end_time': '15:30:00',
+                    'lecture_duration_minutes': 45,
+                    'working_days': ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
+                    'breaks': [
+                        {'name': 'Morning Break', 'start_time': '10:30:00', 'end_time': '10:45:00'},
+                        {'name': 'Lunch Break', 'start_time': '12:30:00', 'end_time': '13:15:00'},
+                    ],
+                    'academic_year': '2024-2025',
+                }
+            )
+            
+            # Get all streams for this school
+            streams = Stream.objects.filter(school=school)
+            
+            if not streams.exists():
+                return Response({'message': 'No streams found for this school.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get all teacher assignments for this school
+            teacher_assignments = TeacherAssignment.objects.filter(school=school, is_active=True)
+            
+            if not teacher_assignments.exists():
+                return Response({'message': 'No teacher assignments found.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Build day slots from config
+            working_days = config.working_days or ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']
+            breaks = config.breaks or []
+            school_start = config.school_start_time
+            school_end = config.school_end_time
+            lecture_duration = config.lecture_duration_minutes
+            
+            # Parse break times to minutes
+            break_ranges = []
+            for brk in breaks:
+                brk_start = brk.get('start_time', '00:00')
+                brk_end = brk.get('end_time', '00:00')
+                bs_h, bs_m = map(int, brk_start.split(':')[:2])
+                be_h, be_m = map(int, brk_end.split(':')[:2])
+                break_ranges.append({
+                    'name': brk.get('name', 'Break'),
+                    'start_min': bs_h * 60 + bs_m,
+                    'end_min': be_h * 60 + be_m,
+                    'start_time': brk_start,
+                    'end_time': brk_end,
+                })
+            
+            # Build day slots
+            day_slots = []
+            for day in working_days:
+                slots = []
+                current_minutes = school_start.hour * 60 + school_start.minute
+                end_minutes = school_end.hour * 60 + school_end.minute
+                
+                while current_minutes < end_minutes:
+                    # Check if current time is within a break
+                    active_break = None
+                    for brk in break_ranges:
+                        if brk['start_min'] <= current_minutes < brk['end_min']:
+                            active_break = brk
+                            break
+                    
+                    if active_break:
+                        slots.append({
+                            'type': 'break',
+                            'break_name': active_break['name'],
+                            'start_time': active_break['start_time'],
+                            'end_time': active_break['end_time'],
+                        })
+                        current_minutes = active_break['end_min']
+                        continue
+                    
+                    # Find next break start
+                    next_break_start = None
+                    for brk in break_ranges:
+                        if brk['start_min'] > current_minutes:
+                            if next_break_start is None or brk['start_min'] < next_break_start:
+                                next_break_start = brk['start_min']
+                    
+                    if next_break_start is not None:
+                        slot_end = min(next_break_start, end_minutes)
+                    else:
+                        slot_end = end_minutes
+                    
+                    # Only add lecture slots with reasonable duration
+                    if slot_end - current_minutes >= lecture_duration // 2:
+                        start_h = current_minutes // 60
+                        start_m = current_minutes % 60
+                        end_h = slot_end // 60
+                        end_m = slot_end % 60
+                        
+                        slots.append({
+                            'type': 'lecture',
+                            'start_time': f"{start_h:02d}:{start_m:02d}",
+                            'end_time': f"{end_h:02d}:{end_m:02d}",
+                            'duration': slot_end - current_minutes,
+                        })
+                    
+                    current_minutes = slot_end
+                
+                day_slots.append({
+                    'day': day,
+                    'slots': slots
+                })
+            
+            # Build class needs based on teacher assignments
+            # Group by stream and subject
+            class_needs = {}
+            for assignment in teacher_assignments:
+                stream = assignment.stream
+                learning_area = assignment.learning_area
+                teacher = assignment.teacher
+                
+                if stream and learning_area and teacher:
+                    stream_id = stream.id
+                    if stream_id not in class_needs:
+                        class_needs[stream_id] = []
+                    
+                    # Calculate weekly lectures needed (default 5 per week)
+                    weekly_lectures = 5
+                    
+                    class_needs[stream_id].append({
+                        'stream_id': stream_id,
+                        'stream': stream,
+                        'subject_id': learning_area.id,
+                        'subject': learning_area,
+                        'teacher_id': teacher.id,
+                        'teacher': teacher,
+                        'weekly_lectures': weekly_lectures,
+                        'remaining': weekly_lectures,
+                        'weightage': 100,
+                    })
+            
+            # Sort needs by weightage
+            for stream_id in class_needs:
+                class_needs[stream_id].sort(key=lambda x: x['weightage'], reverse=True)
+            
+            # Track teacher busy slots
+            num_slots = len(day_slots[0]['slots']) if day_slots and day_slots[0]['slots'] else 8
+            teacher_busy = {}
+            for stream_id in class_needs:
+                for need in class_needs[stream_id]:
+                    t_id = need['teacher_id']
+                    if t_id not in teacher_busy:
+                        teacher_busy[t_id] = {}
+                        for day in working_days:
+                            teacher_busy[t_id][day] = [False] * num_slots
+            
+            # Generate timetable slots
+            generated_slots = []
+            for stream_id, needs in class_needs.items():
+                for day_idx, day_config in enumerate(day_slots):
+                    day = day_config['day']
+                    for slot_idx, slot_config in enumerate(day_config['slots']):
+                        if slot_config['type'] == 'break':
+                            continue
+                        
+                        # Try to allocate from needs
+                        allocated = False
+                        for need in needs:
+                            if need['remaining'] <= 0:
+                                continue
+                            
+                            teacher_id = need['teacher_id']
+                            
+                            # Check if teacher is free
+                            if teacher_busy.get(teacher_id, {}).get(day, [False] * num_slots)[slot_idx]:
+                                continue
+                            
+                            # Check daily burden (max 3 periods/day)
+                            daily_load = sum(1 for b in teacher_busy.get(teacher_id, {}).get(day, []) if b)
+                            if daily_load >= 3:
+                                continue
+                            
+                            # Check consecutive burden (max 3 consecutive)
+                            consecutive = 1
+                            step = 1
+                            while slot_idx - step >= 0 and teacher_busy.get(teacher_id, {}).get(day, [False] * num_slots)[slot_idx - step]:
+                                consecutive += 1
+                                step += 1
+                            step = 1
+                            while slot_idx + step < num_slots and teacher_busy.get(teacher_id, {}).get(day, [False] * num_slots)[slot_idx + step]:
+                                consecutive += 1
+                                step += 1
+                            
+                            if consecutive > 3:
+                                continue
+                            
+                            # Allocate this slot
+                            generated_slots.append({
+                                'stream_id': stream_id,
+                                'day': day,
+                                'slot_idx': slot_idx,
+                                'subject_id': need['subject_id'],
+                                'teacher_id': teacher_id,
+                                'start_time': slot_config['start_time'],
+                                'end_time': slot_config['end_time'],
+                                'is_break': False,
+                            })
+                            
+                            # Mark teacher as busy
+                            teacher_busy[teacher_id][day][slot_idx] = True
+                            need['remaining'] -= 1
+                            allocated = True
+                            break
+                        
+                        # Backfill if no standard allocation
+                        if not allocated:
+                            # Find any available teacher for this stream
+                            available = []
+                            for need in needs:
+                                teacher_id = need['teacher_id']
+                                if not teacher_busy.get(teacher_id, {}).get(day, [False] * num_slots)[slot_idx]:
+                                    if need['remaining'] > 0:
+                                        available.append(need)
+                            
+                            if available:
+                                # Sort by daily load (lowest first)
+                                available.sort(key=lambda x: sum(1 for b in teacher_busy.get(x['teacher_id'], {}).get(day, []) if b))
+                                best = available[0]
+                                generated_slots.append({
+                                    'stream_id': stream_id,
+                                    'day': day,
+                                    'slot_idx': slot_idx,
+                                    'subject_id': best['subject_id'],
+                                    'teacher_id': best['teacher_id'],
+                                    'start_time': slot_config['start_time'],
+                                    'end_time': slot_config['end_time'],
+                                    'is_break': False,
+                                })
+                                teacher_busy[best['teacher_id']][day][slot_idx] = True
+            
+            # Add break slots
+            for stream in streams:
+                for day_idx, day_config in enumerate(day_slots):
+                    day = day_config['day']
+                    for slot_idx, slot_config in enumerate(day_config['slots']):
+                        if slot_config['type'] == 'break':
+                            generated_slots.append({
+                                'stream_id': stream.id,
+                                'day': day,
+                                'slot_idx': slot_idx,
+                                'subject_id': None,
+                                'teacher_id': None,
+                                'start_time': slot_config['start_time'],
+                                'end_time': slot_config['end_time'],
+                                'is_break': True,
+                                'break_name': slot_config.get('break_name', 'Break'),
+                            })
+            
+            # Save to database
+            TimetableSlot.objects.filter(school=school).delete()
+            
+            created_count = 0
+            for slot_data in generated_slots:
+                TimetableSlot.objects.create(
+                    school=school,
+                    stream_id=slot_data['stream_id'],
+                    day_of_week=slot_data['day'],
+                    start_time=slot_data['start_time'],
+                    end_time=slot_data['end_time'],
+                    subject_id=slot_data['subject_id'],
+                    teacher_id=slot_data['teacher_id'],
+                    is_break=slot_data['is_break'],
+                    break_name=slot_data.get('break_name', ''),
+                    room='',
+                )
+                created_count += 1
+            
+            return Response({
+                'message': 'Timetable generated successfully!',
+                'slots_created': created_count,
+                'streams_processed': streams.count(),
+                'slots_per_day': len(day_slots[0]['slots']) if day_slots else 0
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'message': f'Error generating timetable: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TimetableConfigViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
+    queryset = TimetableConfig.objects.all()
+    serializer_class = TimetableConfigSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(school=self.request.user.school)
+
+
+class TimetableSlotViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
+    queryset = TimetableSlot.objects.all()
+    serializer_class = TimetableSlotSerializer
+    
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
 
