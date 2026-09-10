@@ -4,23 +4,37 @@ set -e
 # ==============================================================================
 # Deployment script for School Management System
 # Run this ON THE SERVER after copying project files there.
-#
+
 # Prerequisites:
 #   - Ubuntu 22.04 server with SSH access
 #   - Domain name (e.g., yourdomain.com) pointing to this server's IP
 #   - Git repository access (to pull latest code)
-#
+#   - sudo privileges for the user running this script
+
 # Usage:
 #   chmod +x deploy/deploy.sh
-#   ./deploy/deploy.sh
+#   ./deploy/deploy.sh [domain] [email]
 # ==============================================================================
 
-DOMAIN=${1:-yourdomain.com}
-EMAIL=${2:-admin@yourdomain.com}
-PROJECT_DIR=${PROJECT_DIR:-"/var/www/school_backend"}
-FRONTEND_DIR=${FRONTEND_DIR:-"/var/www/school_frontend"}
+DOMAIN=${1:-codingclubskenya.com}
+EMAIL=${2:-admin@codingclubskenya.com}
+PROJECT_DIR="/home/personal/personalweb/epk"
+FRONTEND_DIR="/home/personal/personalweb/frontend-apk-web"
 GUNICORN_LOG_DIR="/var/log/gunicorn"
 VENV_DIR="${PROJECT_DIR}/venv"
+
+# Ensure we have root privileges for system commands
+if [ "$EUID" -ne 0 ]; then
+  SUDO="sudo"
+else
+  SUDO=""
+fi
+echo "Using sudo prefix: ${SUDO:-none}"
+
+# Verify sudo access
+if [ -n "$SUDO" ]; then
+  $SUDO -v 2>/dev/null || { echo "ERROR: sudo privileges required"; exit 1; }
+fi
 
 echo "========================================"
 echo "School Management System - Deployment"
@@ -28,26 +42,18 @@ echo "========================================"
 
 # ---- 1. Install system packages ----
 echo "[1/9] Installing system packages..."
-apt-get update
-apt-get install -y \
+$SUDO apt-get update
+$SUDO apt-get install -y \
     python3-pip python3-venv python3-dev \
     libpq-dev gcc \
     redis-server \
     nginx \
     git \
-    curl \
     certbot python3-certbot-nginx
-
-# Install Node.js 20+ (required by Vite 8)
-if ! command -v node &> /dev/null || node --version | grep -q "v18\." || [ "$(node -p "require('process').versions.node.split('.')[0]')" -lt 20 ]; then
-    echo "Installing Node.js 20..."
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-fi
 
 # ---- 2. Setup PostgreSQL ----
 echo "[2/9] Setting up PostgreSQL..."
-apt-get install -y postgresql postgresql-contrib
+$SUDO apt-get install -y postgresql postgresql-contrib
 
 # Create database and user
 sudo -u postgres psql -c "DROP DATABASE IF EXISTS school_mgmt;" || true
@@ -58,16 +64,16 @@ sudo -u postgres psql -c "ALTER USER school_user CREATEDB;"
 
 # ---- 3. Project directory setup ----
 echo "[3/9] Setting up project directory..."
-mkdir -p "${PROJECT_DIR}"
-chown -R $USER:$USER "${PROJECT_DIR}"
+$SUDO mkdir -p "${PROJECT_DIR}"
+$SUDO chown -R devops:devops "${PROJECT_DIR}"
 
 # If this is a fresh deploy, clone from git
 if [ ! -d "${PROJECT_DIR}/backend" ]; then
     echo "Cloning repository..."
-    git clone https://github.com/fattym/epk.git "${PROJECT_DIR}/tmp_clone"
-    cp -r "${PROJECT_DIR}/tmp_clone/backend" "${PROJECT_DIR}/backend"
-    cp -r "${PROJECT_DIR}/tmp_clone/frontend/codingclubskenya" "${PROJECT_DIR}/frontend_app"
-    rm -rf "${PROJECT_DIR}/tmp_clone"
+    $SUDO git clone https://github.com/YOUR_USERNAME/school-management.git "${PROJECT_DIR}/tmp_clone"
+    $SUDO cp -r "${PROJECT_DIR}/tmp_clone/backend" "${PROJECT_DIR}/backend"
+    $SUDO cp -r "${PROJECT_DIR}/tmp_clone/frontend/codingclubskenya" "${PROJECT_DIR}/frontend_app"
+    $SUDO rm -rf "${PROJECT_DIR}/tmp_clone"
 fi
 
 # ---- 4. Python virtual environment ----
@@ -82,20 +88,24 @@ pip install --upgrade pip
 
 # Install Python dependencies
 pip install -r "${PROJECT_DIR}/backend/requirements.txt"
+pip install -r "${PROJECT_DIR}/backend/venv_requirements.txt" 2>/dev/null || \
+    pip install Django==6.0.7 djangorestframework==3.17.1 \
+    djangorestframework-simplejwt==5.5.1 django-filter==26.1.0 \
+    django-cors-headers==4.9.0 drf-spectacular==0.30.0 \
+    celery==5.6.3 redis==8.0.1 psycopg2-binary==2.9.10
 
 # ---- 5. Environment configuration ----
 echo "[5/9] Configuring environment..."
 
 # Generate a random secret key if not set
 if [ ! -f "${PROJECT_DIR}/.env" ]; then
-    _SECRET_KEY=$(python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())' 2>/dev/null || openssl rand -hex 32)
     cat > "${PROJECT_DIR}/.env" << EOF
-SECRET_KEY=${_SECRET_KEY}
+SECRET_KEY=$(python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')
 DB_ENGINE=django.db.backends.postgresql
 DB_NAME=school_mgmt
 DB_USER=school_user
 DB_PASSWORD=GENERATED_ON_SERVER
-DB_HOST=127.0.0.1
+DB_HOST=localhost
 DB_PORT=5432
 ALLOWED_HOSTS=${DOMAIN},www.${DOMAIN},localhost
 CORS_ALLOWED_ORIGINS=https://${DOMAIN},https://www.${DOMAIN}
@@ -122,26 +132,26 @@ cp "${PROJECT_DIR}/backend/gunicorn.conf.py" "${PROJECT_DIR}/gunicorn.conf.py"
 
 # ---- 6. Copy systemd service files ----
 echo "[6/9] Setting up systemd services..."
-cp "${PROJECT_DIR}/deploy/epk.service" /etc/systemd/system/epk.service
-cp "${PROJECT_DIR}/deploy/celery.service" /etc/systemd/system/celery.service
-cp "${PROJECT_DIR}/deploy/celery-beat.service" /etc/systemd/system/celery-beat.service
+$SUDO cp "${PROJECT_DIR}/deploy/gunicorn.service" /etc/systemd/system/gunicorn.service
+$SUDO cp "${PROJECT_DIR}/deploy/celery.service" /etc/systemd/system/celery.service
+$SUDO cp "${PROJECT_DIR}/deploy/celery-beat.service" /etc/systemd/system/celery-beat.service
 
 # Update paths in service files
-sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/epk.service
-sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/celery.service
-sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/celery-beat.service
+$SUDO sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/gunicorn.service
+$SUDO sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/celery.service
+  $SUDO sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/systemd/system/celery-beat.service
 
-# Update user in service files
-sed -i "s|User=devops|User=$USER|g" /etc/systemd/system/epk.service
-sed -i "s|Group=devops|Group=$USER|g" /etc/systemd/system/epk.service
-sed -i "s|User=school|User=$USER|g" /etc/systemd/system/celery.service
-sed -i "s|Group=school|Group=$USER|g" /etc/systemd/system/celery.service
-sed -i "s|User=school|User=$USER|g" /etc/systemd/system/celery-beat.service
-sed -i "s|Group=school|Group=$USER|g" /etc/systemd/system/celery-beat.service
+# Update user in service files (use devops user)
+$SUDO sed -i "s|User=school|User=devops|g" /etc/systemd/system/gunicorn.service
+$SUDO sed -i "s|Group=school|Group=devops|g" /etc/systemd/system/gunicorn.service
+$SUDO sed -i "s|User=devops|User=devops|g" /etc/systemd/system/celery.service
+$SUDO sed -i "s|Group=devops|Group=devops|g" /etc/systemd/system/celery.service
+$SUDO sed -i "s|User=devops|User=devops|g" /etc/systemd/system/celery-beat.service
+$SUDO sed -i "s|Group=devops|Group=devops|g" /etc/systemd/system/celery-beat.service
 
-systemctl daemon-reload
-systemctl enable epk celery celery-beat
-systemctl start redis-server
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable gunicorn celery celery-beat
+$SUDO systemctl start redis-server
 
 # ---- 7. Django migrations & static files ----
 echo "[7/9] Running Django migrations..."
@@ -163,44 +173,44 @@ npm ci 2>/dev/null || npm install
 
 # Update API URL for production
 cat > .env.production << EOF
-VITE_API_URL=https://${DOMAIN}/api
+VITE_API_URL=https://${DOMAIN}
 EOF
 
 npm run build
 
 # Copy built files to frontend directory
 cp -r dist/* "${FRONTEND_DIR}/"
-chown -R $USER:$USER "${FRONTEND_DIR}"
+$SUDO chown -R devops:devops "${FRONTEND_DIR}"
 
 # ---- 9. Nginx configuration ----
 echo "[9/9] Configuring Nginx..."
-cp "${PROJECT_DIR}/deploy/nginx/school_management" /etc/nginx/sites-available/school_management
+$SUDO cp "${PROJECT_DIR}/deploy/nginx/school_management" /etc/nginx/sites-available/school_management
 
 # Update domain and paths in nginx config
-sed -i "s|yourdomain.com|${DOMAIN}|g" /etc/nginx/sites-available/school_management
-sed -i "s|www.yourdomain.com|www.${DOMAIN}|g" /etc/nginx/sites-available/school_management
-sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/nginx/sites-available/school_management
-sed -i "s|/var/www/school_frontend|${FRONTEND_DIR}|g" /etc/nginx/sites-available/school_management
+$SUDO sed -i "s|codingclubskenya.com|${DOMAIN}|g" /etc/nginx/sites-available/school_management
+$SUDO sed -i "s|www.codingclubskenya.com|www.${DOMAIN}|g" /etc/nginx/sites-available/school_management
+$SUDO sed -i "s|/var/www/school_backend|${PROJECT_DIR}|g" /etc/nginx/sites-available/school_management
+$SUDO sed -i "s|/var/www/school_frontend|${FRONTEND_DIR}|g" /etc/nginx/sites-available/school_management
 
-ln -sf /etc/nginx/sites-available/school_management /etc/nginx/sites-enabled/school_management
-rm -f /etc/nginx/sites-enabled/default
+$SUDO ln -sf /etc/nginx/sites-available/school_management /etc/nginx/sites-enabled/school_management
+$SUDO rm -f /etc/nginx/sites-enabled/default
 
 # Test nginx config
-nginx -t
+$SUDO nginx -t
 
 # Start services
-systemctl restart gunicorn
-systemctl restart celery
-systemctl restart celery-beat
-systemctl restart nginx
+$SUDO systemctl restart gunicorn
+$SUDO systemctl restart celery
+$SUDO systemctl restart celery-beat
+$SUDO systemctl restart nginx
 
 # ---- 10. SSL with Let's Encrypt ----
 echo "========================================"
 echo "Setting up SSL with Let's Encrypt..."
 echo "========================================"
-certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --email "${EMAIL}" --non-interactive --redirect || {
+$SUDO certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --email "${EMAIL}" --non-interactive --redirect || {
     echo "WARNING: Certbot failed. HTTPS may not be configured."
-    echo "You can run: certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
+    echo "You can run: sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
 }
 
 # ---- Summary ----
