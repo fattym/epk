@@ -21,8 +21,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'CHANGE-ME-IN-PRODUCTION')
 DEBUG = False
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
-if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
-    ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com', 'localhost']
+    if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
+        ALLOWED_HOSTS = ['codingclubskenya.com', 'www.codingclubskenya.com', 'localhost']
 
 CSRF_TRUSTED_ORIGINS = [
     'https://' + host for host in ALLOWED_HOSTS if not host.startswith('localhost')
@@ -137,8 +137,8 @@ if _cors_origins:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
 else:
     CORS_ALLOWED_ORIGINS = [
-        'https://yourdomain.com',
-        'https://www.yourdomain.com',
+        'https://codingclubskenya.com',
+        'https://www.codingclubskenya.com',
     ]
 
 CORS_ALLOW_CREDENTIALS = True
