@@ -22,7 +22,12 @@ DEBUG = False
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
-    ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com', 'localhost']
+    ALLOWED_HOSTS = ['codingclubskenya.com',
+    'www.codingclubskenya.com',
+    '213.199.41.219',
+    'localhost',
+    '127.0.0.1',
+    '*',  ]
 
 CSRF_TRUSTED_ORIGINS = [
     'https://' + host for host in ALLOWED_HOSTS if not host.startswith('localhost')

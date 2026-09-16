@@ -1,41 +1,32 @@
 #!/bin/bash
 set -e
-
-# Quick update script - run this for minor code updates
-# Usage: ./deploy/update.sh
-
-PROJECT_DIR="/var/www/school_backend"
-DOMAIN=${1:-yourdomain.com}
-
-echo "Updating School Management System..."
+PROJECT_DIR="/home/personal/personalweb/epk"
+FRONTEND_SRC_DIR="${PROJECT_DIR}/frontend/codingclubskenya"
+FRONTEND_OUT_DIR="/home/personal/personalweb/frontend-apk-web"
+DOMAIN=${1:-codingclubskenya.com}
+if [ "$EUID" -ne 0 ]; then
+  SUDO="sudo"
+else
+  SUDO=""
+fi
 
 cd "${PROJECT_DIR}/backend"
 source "${PROJECT_DIR}/venv/bin/activate"
-
-# Pull latest code
-git pull origin main
-
-# Install any new dependencies
+git pull origin master
 pip install -r requirements.txt
-
-# Run migrations
 python manage.py migrate --settings=core.settings_production
-
-# Collect static files
 python manage.py collectstatic --noinput --settings=core.settings_production
-
-# Update frontend
-cd "${PROJECT_DIR}/frontend_app"
+cd "${FRONTEND_SRC_DIR}"
 npm ci 2>/dev/null || npm install
-cat > .env.production << EOF
-VITE_API_URL=https://${DOMAIN}/api
-EOF
+cat > .env.production << ENV
+VITE_API_URL=https://${DOMAIN}
+ENV
 npm run build
-cp -r dist/* /var/www/school_frontend/
-
-# Restart services
-systemctl restart gunicorn
-systemctl restart celery
-systemctl restart nginx
-
+mkdir -p "${FRONTEND_OUT_DIR}"
+$SUDO cp -r dist/* "${FRONTEND_OUT_DIR}/"
+$SUDO chown -R devops:devops "${FRONTEND_OUT_DIR}"
+$SUDO systemctl restart gunicorn
+$SUDO systemctl restart celery
+$SUDO systemctl restart celery-beat
+$SUDO systemctl reload nginx
 echo "Update complete!"

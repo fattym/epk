@@ -33,6 +33,15 @@ server {
     root /var/www/school_frontend;
     index index.html;
 
+    location = /schoolsystems {
+        return 301 /schoolsystems/;
+    }
+
+    location /schoolsystems/ {
+        alias /var/www/school_frontend/;
+        try_files $uri $uri/ /schoolsystems/index.html;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
