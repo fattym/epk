@@ -1,0 +1,5 @@
+#!/bin/bash
+cd /home/devops/home/personal/personalweb/epk
+source venv/bin/activate
+export DJANGO_SETTINGS_MODULE=core.settings_production
+exec gunicorn --workers 3 --bind unix:/home/devops/home/personal/personalweb/epk/epk.sock --umask 000 --access-logfile /home/devops/home/personal/personalweb/epk/logs/gunicorn-access.log --error-logfile /home/devops/home/personal/personalweb/epk/logs/gunicorn-error.log core.wsgi:application
