@@ -1,14 +1,15 @@
 [Unit]
-Description=celery worker for School Management System
-After=network.target
+Description=Celery Worker for School Management System (learningpack)
+After=network.target redis-server.service
 
 [Service]
+Type=simple
 User=school
 Group=school
 WorkingDirectory=/var/www/school_backend
 Environment="DJANGO_SETTINGS_MODULE=core.settings_production"
 EnvironmentFile=/var/www/school_backend/.env
-ExecStart=/var/www/school_backend/venv/bin/celery -A core worker -l info
+ExecStart=/var/www/school_backend/venv/bin/python3 -m celery -A core worker -l info
 Restart=always
 RestartSec=3
 

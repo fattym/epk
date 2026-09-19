@@ -1,16 +1,21 @@
 [Unit]
-Description=gunicorn daemon for School Management System
+Description=Gunicorn Daemon for School Management System (learningpack)
 After=network.target
 
 [Service]
+Type=simple
 User=school
 Group=school
 WorkingDirectory=/var/www/school_backend
 Environment="DJANGO_SETTINGS_MODULE=core.settings_production"
 EnvironmentFile=/var/www/school_backend/.env
 ExecStart=/var/www/school_backend/venv/bin/gunicorn \
-  --config /var/www/school_backend/gunicorn.conf.py \
+  --workers 3 \
+  --bind 127.0.0.1:8000 \
+  --access-logfile /var/www/school_backend/logs/gunicorn-access.log \
+  --error-logfile /var/www/school_backend/logs/gunicorn-error.log \
   core.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=3
 

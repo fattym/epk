@@ -1,0 +1,182 @@
+# Nginx config for School Management System at /learningpack
+# Place at: /etc/nginx/sites-available/learningpack
+# Enable with: ln -s /etc/nginx/sites-available/learningpack /etc/nginx/sites-enabled/
+# Remove default: rm /etc/nginx/sites-enabled/default
+
+# HTTP - redirect to HTTPS, handle Let's Encrypt ACME challenge
+server {
+    listen 80;
+    server_name codingclubskenya.com;
+
+    # Let's Encrypt ACME challenge
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Redirect all HTTP traffic to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS
+server {
+    listen 443 ssl http2;
+    server_name codingclubskenya.com;
+
+    # SSL certificates (obtain via: certbot --nginx -d codingclubskenya.com -d www.codingclubskenya.com)
+    ssl_certificate /etc/letsencrypt/live/codingclubskenya.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/codingclubskenya.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Security headers
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-XSS-Protection "1; mode=block";
+
+    # Client upload size (for file uploads via admin/mobile)
+    client_max_body_size 50M;
+
+    # React frontend at /learningpack/
+    location /learningpack/ {
+        alias /var/www/school_frontend/;
+        try_files $uri $uri/ /learningpack/index.html;
+    }
+
+    location = /learningpack {
+        return 301 /learningpack/;
+    }
+
+    # Django API - proxy to gunicorn, strip /learningpack prefix
+    location /learningpack/api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_redirect off;
+    }
+
+    # Django admin - proxy to gunicorn, strip /learningpack prefix
+    location /learningpack/admin/ {
+        proxy_pass http://127.0.0.1:8000/admin/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_redirect off;
+    }
+
+    # Django static files (CSS, JS, images from admin etc.)
+    location /learningpack/static/ {
+        alias /var/www/school_backend/staticfiles/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Django media files
+    location /learningpack/media/ {
+        alias /var/www/school_backend/media/;
+        expires 7d;
+    }
+
+    # Distributor app (Next.js) - proxy to port 3001
+    location /distributor/ {
+        proxy_pass http://127.0.0.1:3001/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_redirect off;
+    }
+
+    # Redirect /distributor to /distributor/
+    location = /distributor {
+        return 301 /distributor/;
+    }
+}
+
+    # Redirect all HTTP traffic to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS
+server {
+    listen 443 ssl http2;
+    server_name codingclubskenya.com;
+
+    # SSL certificates (obtain via: certbot --nginx -d codingclubskenya.com -d www.codingclubskenya.com)
+    ssl_certificate /etc/letsencrypt/live/codingclubskenya.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/codingclubskenya.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Security headers
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-XSS-Protection "1; mode=block";
+
+    # Client upload size
+    client_max_body_size 50M;
+
+    # React frontend at /learningpack/
+    location /learningpack/ {
+        alias /var/www/school_frontend/;
+        try_files $uri $uri/ /learningpack/index.html;
+    }
+
+    # Redirect bare /learningpack to /learningpack/
+    location = /learningpack {
+        return 301 /learningpack/;
+    }
+
+    # Django API - proxy to gunicorn, strip /learningpack prefix
+    location /learningpack/api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_redirect off;
+    }
+
+    # Django admin - proxy to gunicorn, strip /learningpack prefix
+    location /learningpack/admin/ {
+        proxy_pass http://127.0.0.1:8000/admin/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_redirect off;
+    }
+
+    # Django static files (CSS, JS, images from admin etc.)
+    location /learningpack/static/ {
+        alias /var/www/school_backend/staticfiles/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Django media files
+    location /learningpack/media/ {
+        alias /var/www/school_backend/media/;
+        expires 7d;
+    }
+
+    # Distributor app (Next.js) - if running as a separate service
+    location /distributor/ {
+        proxy_pass http://127.0.0.1:3001/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_redirect off;
+    }
+}
