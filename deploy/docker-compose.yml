@@ -1,4 +1,6 @@
 version: '3.8'
+# Optional: Docker-based infrastructure for development.
+# The production deploy script (deploy_learningpack.sh) uses native services instead.
 
 services:
   redis:

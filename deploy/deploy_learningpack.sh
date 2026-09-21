@@ -9,12 +9,34 @@
 #
 # Prerequisites on the server:
 #   - Ubuntu 22.04
-#   - Docker + Docker Compose
+#   - Nginx (sudo apt-get install nginx)
+#   - Redis (sudo apt-get install redis-server)
+#   - PostgreSQL 16 (sudo apt-get install postgresql-16)
 #   - Node.js 20+
 #   - Python 3.12+ with venv
 #   - The domain codingclubskenya.com must point to this server's IP
 # ==============================================================================
 set -e
+
+# ---- 0. Install system packages (nginx, redis, postgresql) ----
+echo "[0/8] Installing system packages..."
+if ! command -v nginx &> /dev/null; then
+    sudo apt-get install -y nginx
+fi
+if ! command -v redis-server &> /dev/null; then
+    sudo apt-get install -y redis-server
+    sudo systemctl enable redis-server
+    sudo systemctl start redis-server
+fi
+if ! command -v psql &> /dev/null; then
+    sudo apt-get install -y postgresql postgresql-contrib
+    sudo systemctl enable postgresql
+    sudo systemctl start postgresql
+    # Create database and user
+    sudo -u postgres psql -c "CREATE USER school_user WITH PASSWORD 'GENERATED_ON_SERVER';" 2>/dev/null || true
+    sudo -u postgres psql -c "CREATE DATABASE school_mgmt OWNER school_user;" 2>/dev/null || true
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE school_mgmt TO school_user;" 2>/dev/null || true
+fi
 
 DOMAIN="codingclubskenya.com"
 PROJECT_DIR="/var/www/school_backend"
