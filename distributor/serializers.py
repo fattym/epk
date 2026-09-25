@@ -10,8 +10,8 @@ class DistributorProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DistributorProfile
-        fields = ['id', 'user', 'company_name', 'registration_number', 'address', 'phone', 'email', 'logo', 'is_verified', 'created_at', 'updated_at', 'wallet_balance']
-        read_only_fields = ['id', 'user', 'is_verified', 'created_at', 'updated_at', 'wallet_balance']
+        fields = ['id', 'user', 'company_name', 'registration_number', 'address', 'phone', 'email', 'logo', 'is_verified', 'is_suspended', 'created_at', 'updated_at', 'wallet_balance']
+        read_only_fields = ['id', 'user', 'is_verified', 'is_suspended', 'created_at', 'updated_at', 'wallet_balance']
 
     def get_wallet_balance(self, obj):
         try:

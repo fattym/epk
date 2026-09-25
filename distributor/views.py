@@ -18,18 +18,56 @@ User = get_user_model()
 
 
 class DistributorProfileViewSet(viewsets.ModelViewSet):
-    queryset = DistributorProfile.objects.none()
+    queryset = DistributorProfile.objects.all()
     serializer_class = DistributorProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
+        if user.is_staff or user.role == 'ADMIN':
+            return DistributorProfile.objects.all()
         if user.role == 'DISTRIBUTOR':
             return DistributorProfile.objects.filter(user=user)
         return DistributorProfile.objects.none()
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='approve')
+    def approve(self, request, pk=None):
+        profile = self.get_object()
+        profile.is_verified = True
+        profile.save()
+        serializer = self.get_serializer(profile)
+        return Response({'detail': 'Distributor approved.', 'is_verified': True, 'profile': serializer.data})
+
+    @action(detail=True, methods=['post'], url_path='suspend')
+    def suspend(self, request, pk=None):
+        profile = self.get_object()
+        profile.is_suspended = True
+        profile.save()
+        serializer = self.get_serializer(profile)
+        return Response({'detail': 'Distributor suspended.', 'is_suspended': True, 'profile': serializer.data})
+
+    @action(detail=True, methods=['post'], url_path='unsuspend')
+    def unsuspend(self, request, pk=None):
+        profile = self.get_object()
+        profile.is_suspended = False
+        profile.save()
+        serializer = self.get_serializer(profile)
+        return Response({'detail': 'Distributor unsuspended.', 'is_suspended': False, 'profile': serializer.data})
+
+    @action(detail=False, methods=['get'], url_path='pending')
+    def pending(self, request):
+        pending = DistributorProfile.objects.filter(is_verified=False, is_suspended=False)
+        serializer = self.get_serializer(pending, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='suspended')
+    def suspended(self, request):
+        suspended = DistributorProfile.objects.filter(is_suspended=True)
+        serializer = self.get_serializer(suspended, many=True)
+        return Response(serializer.data)
 
 
 class DistributorProductViewSet(viewsets.ModelViewSet):
@@ -67,9 +105,16 @@ class DistributorProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if user.role != 'DISTRIBUTOR':
-            raise PermissionDenied('Only distributors can create products.')
-        profile = user.distributor_profile
+        if user.role == 'DISTRIBUTOR':
+            profile = user.distributor_profile
+        elif user.is_staff or user.role == 'ADMIN':
+            distributor_id = self.request.data.get('distributor')
+            if distributor_id:
+                profile = DistributorProfile.objects.get(id=distributor_id)
+            else:
+                raise PermissionDenied('Admin must specify a distributor.')
+        else:
+            raise PermissionDenied('Only distributors or admins can create products.')
         serializer.save(distributor=profile)
 
 

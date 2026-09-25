@@ -7,8 +7,8 @@ from .models import (
 
 @admin.register(DistributorProfile)
 class DistributorProfileAdmin(admin.ModelAdmin):
-    list_display = ['company_name', 'user', 'phone', 'email', 'is_verified', 'created_at']
-    list_filter = ['is_verified']
+    list_display = ['company_name', 'user', 'phone', 'email', 'is_verified', 'is_suspended', 'created_at']
+    list_filter = ['is_verified', 'is_suspended']
     search_fields = ['company_name', 'user__email', 'phone', 'email']
 
 
