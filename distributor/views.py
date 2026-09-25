@@ -5,8 +5,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from shop.views import sync_distributor_categories
-from .models import DistributorProfile, DistributorProduct, SchoolOrder, SchoolOrderItem, Delivery
-from .serializers import DistributorProfileSerializer, DistributorProductSerializer, SchoolOrderSerializer, DeliverySerializer
+from .models import (
+    DistributorProfile, DistributorProduct, SchoolOrder, SchoolOrderItem, Delivery,
+    DistributorWallet, WalletTransaction,
+)
+from .serializers import (
+    DistributorProfileSerializer, DistributorProductSerializer, SchoolOrderSerializer,
+    DeliverySerializer, WalletTransactionSerializer, DistributorWalletSerializer,
+)
 
 User = get_user_model()
 
@@ -103,3 +109,40 @@ class DeliveryViewSet(viewsets.ModelViewSet):
             except DistributorProfile.DoesNotExist:
                 return Delivery.objects.none()
         return Delivery.objects.filter(order__school=user.school)
+
+
+class WalletViewSet(viewsets.ReadOnlyModelViewSet):
+    """Distributors can view their own commission balance + transaction history.
+
+    Staff/admins can view any wallet. The actual money from parent orders is
+    collected into the global "Coding Clubs Kenya" account via M-Pesa; this
+    endpoint merely *reflects* the balance owed to the distributor who supplied
+    the goods.
+    """
+    queryset = DistributorWallet.objects.all()
+    serializer_class = DistributorWalletSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'DISTRIBUTOR':
+            try:
+                profile = user.distributor_profile
+                return DistributorWallet.objects.filter(distributor=profile)
+            except DistributorProfile.DoesNotExist:
+                return DistributorWallet.objects.none()
+        return DistributorWallet.objects.all()
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        qs = self.get_queryset()
+        from django.db.models import Sum, DecimalField
+        agg = qs.aggregate(
+            total_balance=Sum('balance', output_field=DecimalField()),
+            total_earned=Sum('total_earned', output_field=DecimalField()),
+        )
+        return Response({
+            'total_balance': str(agg['total_balance'] or 0),
+            'total_earned': str(agg['total_earned'] or 0),
+            'wallets': list(qs.values('distributor__company_name', 'balance', 'total_earned', 'total_withdrawn')),
+        })

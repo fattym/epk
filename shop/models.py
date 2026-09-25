@@ -88,12 +88,19 @@ class Order(models.Model):
         ('picked_up', 'Picked Up'),
         ('cancelled', 'Cancelled'),
     )
-    parent = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='parent_orders')
-    learner = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='learner_orders')
+    parent = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='parent_orders', null=True, blank=True, help_text='Null for guest (no-account) orders.')
+    learner = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='learner_orders', null=True, blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='orders')
+    delivery_name = models.CharField(max_length=200, blank=True, help_text='Guest delivery contact name.')
+    delivery_phone = models.CharField(max_length=20, blank=True, help_text='Guest delivery phone (also used for the M-Pesa STK push).')
+    delivery_address = models.TextField(blank=True)
+    delivery_county = models.CharField(max_length=100, blank=True)
+    delivery_notes = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_payment')
     pickup_code = models.CharField(max_length=8, unique=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    commission_earned = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+        help_text='Total commission credited to distributor(s) when this order is paid.')
     created_at = models.DateTimeField(auto_now_add=True)
     picked_up_at = models.DateTimeField(null=True, blank=True)
     picked_up_by_staff = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders_processed')
@@ -103,6 +110,15 @@ class Order(models.Model):
 
     def __str__(self):
         return f'Order #{self.id} - {self.learner} - {self.school}'
+
+    def total_commission(self):
+        """Sum of per-item commissions owed to linked distributors."""
+        total = 0
+        for item in self.items.select_related('variant__product__linked_distributor_product__distributor').all():
+            product = item.variant.product
+            if product.linked_distributor_product and product.commission_amount is not None:
+                total += product.commission_amount * item.quantity
+        return total
 
 
 class OrderItem(models.Model):
@@ -133,6 +149,12 @@ class Payment(models.Model):
     mpesa_phone_number = models.CharField(max_length=15, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='initiated')
     confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        from django.utils import timezone
+        if self.status == 'confirmed' and not self.confirmed_at:
+            self.confirmed_at = timezone.now()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'Payment for Order #{self.order.id} - {self.method}'

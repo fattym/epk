@@ -29,7 +29,7 @@ class Invoice(models.Model):
         ('CANCELLED', 'Cancelled'),
     )
     student = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='invoices')
-    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='invoices')
+    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='invoices', null=True, blank=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     due_date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')

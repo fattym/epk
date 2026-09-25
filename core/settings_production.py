@@ -186,6 +186,9 @@ MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
 MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL', '')
 MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'sandbox')
 
+CHAMAGO_API_KEY = os.environ.get('CHAMAGO_API_KEY', '')
+CHAMAGO_API_URL = os.environ.get('CHAMAGO_API_URL', 'https://api.chamago.co.ke')
+
 AI_ASSIST_API_URL = os.environ.get('AI_ASSIST_API_URL', '')
 AI_ASSIST_API_KEY = os.environ.get('AI_ASSIST_API_KEY', '')
 AI_ASSIST_MODEL = os.environ.get('AI_ASSIST_MODEL', 'claude-3-5-sonnet-20240620')

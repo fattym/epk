@@ -1,12 +1,23 @@
 from rest_framework import serializers
-from .models import DistributorProfile, DistributorProduct, SchoolOrder, SchoolOrderItem, Delivery
+from .models import (
+    DistributorProfile, DistributorProduct, SchoolOrder, SchoolOrderItem, Delivery,
+    DistributorWallet, WalletTransaction,
+)
 
 
 class DistributorProfileSerializer(serializers.ModelSerializer):
+    wallet_balance = serializers.SerializerMethodField()
+
     class Meta:
         model = DistributorProfile
-        fields = ['id', 'user', 'company_name', 'registration_number', 'address', 'phone', 'email', 'logo', 'is_verified', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'user', 'is_verified', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'company_name', 'registration_number', 'address', 'phone', 'email', 'logo', 'is_verified', 'created_at', 'updated_at', 'wallet_balance']
+        read_only_fields = ['id', 'user', 'is_verified', 'created_at', 'updated_at', 'wallet_balance']
+
+    def get_wallet_balance(self, obj):
+        try:
+            return str(obj.wallet.balance)
+        except DistributorWallet.DoesNotExist:
+            return '0.00'
 
 
 class DistributorProductSerializer(serializers.ModelSerializer):
@@ -47,3 +58,25 @@ class DeliverySerializer(serializers.ModelSerializer):
         model = Delivery
         fields = ['id', 'order', 'tracking_number', 'carrier', 'status', 'estimated_delivery', 'delivered_at', 'notes', 'created_at', 'updated_at']
         read_only_fields = ['id', 'order', 'created_at', 'updated_at']
+
+
+class WalletTransactionSerializer(serializers.ModelSerializer):
+    order_total = serializers.DecimalField(source='order.total_amount', max_digits=10, decimal_places=2, read_only=True)
+    order_status = serializers.CharField(source='order.status', read_only=True)
+
+    class Meta:
+        model = WalletTransaction
+        fields = ['id', 'wallet', 'order', 'order_total', 'order_status', 'amount', 'transaction_type', 'reference', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class DistributorWalletSerializer(serializers.ModelSerializer):
+    distributor_name = serializers.CharField(source='distributor.company_name', read_only=True)
+    transactions = WalletTransactionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = DistributorWallet
+        fields = ['id', 'distributor', 'distributor_name', 'balance', 'total_earned',
+                  'total_withdrawn', 'created_at', 'updated_at', 'transactions']
+        read_only_fields = ['id', 'distributor', 'distributor_name', 'balance',
+                            'total_earned', 'total_withdrawn', 'created_at', 'updated_at', 'transactions']

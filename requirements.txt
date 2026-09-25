@@ -16,3 +16,5 @@ python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 jsonschema==4.26.0
 uritemplate==4.2.0
+
+requests==2.32.3

@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import DistributorProfile, DistributorProduct, SchoolOrder, SchoolOrderItem, Delivery
+from .models import (
+    DistributorProfile, DistributorProduct, SchoolOrder,
+    SchoolOrderItem, Delivery, DistributorWallet, WalletTransaction,
+)
 
 
 @admin.register(DistributorProfile)
@@ -29,3 +32,19 @@ class DeliveryAdmin(admin.ModelAdmin):
     list_display = ['order', 'status', 'tracking_number', 'carrier', 'estimated_delivery', 'delivered_at']
     list_filter = ['status', 'carrier']
     search_fields = ['tracking_number', 'order__school__name', 'order__distributor__company_name']
+
+
+@admin.register(DistributorWallet)
+class DistributorWalletAdmin(admin.ModelAdmin):
+    list_display = ['distributor', 'balance', 'total_earned', 'total_withdrawn', 'updated_at']
+    list_filter = ['distributor__is_verified']
+    search_fields = ['distributor__company_name', 'distributor__user__email']
+    readonly_fields = ['balance', 'total_earned', 'total_withdrawn']
+
+
+@admin.register(WalletTransaction)
+class WalletTransactionAdmin(admin.ModelAdmin):
+    list_display = ['wallet', 'order', 'transaction_type', 'amount', 'reference', 'created_at']
+    list_filter = ['transaction_type', 'created_at']
+    search_fields = ['reference', 'order__id', 'wallet__distributor__company_name']
+    readonly_fields = ['wallet', 'order', 'transaction_type', 'amount', 'reference', 'created_at']

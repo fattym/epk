@@ -102,3 +102,70 @@ class Delivery(models.Model):
 
     def __str__(self):
         return f'Delivery for {self.order}'
+
+
+class DistributorWallet(models.Model):
+    """Holds the running commission balance for a verified distributor.
+
+    When a parent (school) pays for an order whose items are resold
+    distributor products, the school's markup (the commission) is credited
+    here. The cash itself flows to the global "Coding Clubs Kenya" account
+    via M-Pesa; this wallet merely *reflects* the balance owed to the
+    distributor who supplied the goods.
+    """
+    distributor = models.OneToOneField(DistributorProfile, on_delete=models.CASCADE, related_name='wallet')
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_withdrawn = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'Wallet {self.distributor.company_name} — balance {self.balance}'
+
+    def credit(self, amount, order=None, reference=''):
+        amount = amount or 0
+        self.balance = (self.balance or 0) + amount
+        self.total_earned = (self.total_earned or 0) + amount
+        self.save(update_fields=['balance', 'total_earned', 'updated_at'])
+        WalletTransaction.objects.create(
+            wallet=self,
+            order=order,
+            amount=amount,
+            transaction_type='CREDIT',
+            reference=reference,
+        )
+
+    def debit(self, amount, reference=''):
+        amount = amount or 0
+        self.balance = (self.balance or 0) - amount
+        self.total_withdrawn = (self.total_withdrawn or 0) + amount
+        self.save(update_fields=['balance', 'total_withdrawn', 'updated_at'])
+        WalletTransaction.objects.create(
+            wallet=self,
+            amount=amount,
+            transaction_type='DEBIT',
+            reference=reference,
+        )
+
+
+class WalletTransaction(models.Model):
+    TRANSACTION_TYPE_CHOICES = (
+        ('CREDIT', 'Credit'),
+        ('DEBIT', 'Debit'),
+    )
+    wallet = models.ForeignKey(DistributorWallet, on_delete=models.CASCADE, related_name='transactions')
+    order = models.ForeignKey('shop.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='wallet_transactions')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPE_CHOICES)
+    reference = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.transaction_type} {self.amount} — {self.wallet}'
