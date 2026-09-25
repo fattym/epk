@@ -6,11 +6,11 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment
+from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment, FormSubmission
 from .serializers import (
     ProductCategorySerializer, ProductSerializer, ProductVariantSerializer,
     OrderSerializer, OrderCreateSerializer, GuestOrderCreateSerializer,
-    OrderItemSerializer, PaymentSerializer,
+    OrderItemSerializer, PaymentSerializer, FormSubmissionSerializer,
 )
 from fees.models import Invoice
 from distributor.models import DistributorProduct
@@ -425,3 +425,39 @@ def chama_webhook(request):
 
     logger.info(f'Webhook: payment {payment.id} for order {order.id} confirmed via ChamaGO callback')
     return Response({'detail': 'Payment confirmed', 'order_status': order.status})
+
+
+class FormSubmissionViewSet(viewsets.ModelViewSet):
+    """Public form submissions (contact, onboarding, etc.) with admin review.
+
+    - Anonymous users can POST to create submissions.
+    - Staff/admins can list, retrieve, and update status.
+    """
+    queryset = FormSubmission.objects.all()
+    serializer_class = FormSubmissionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.role == 'ADMIN':
+            return FormSubmission.objects.all()
+        return FormSubmission.objects.none()
+
+    @action(detail=True, methods=['post'], url_path='mark-reviewed')
+    def mark_reviewed(self, request, pk=None):
+        submission = self.get_object()
+        submission.status = 'reviewed'
+        submission.save()
+        return Response({'detail': 'Marked as reviewed', 'status': submission.status})
+
+    @action(detail=True, methods=['post'], url_path='mark-resolved')
+    def mark_resolved(self, request, pk=None):
+        submission = self.get_object()
+        submission.status = 'resolved'
+        submission.save()
+        return Response({'detail': 'Marked as resolved', 'status': submission.status})

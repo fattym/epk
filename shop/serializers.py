@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment
+from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment, FormSubmission
 from tenants.models import School
 import uuid
 
@@ -82,6 +82,16 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = '__all__'
         read_only_fields = ['confirmed_at']
+
+
+class FormSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormSubmission
+        fields = ['id', 'form_type', 'data', 'file', 'status', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'status', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'file': {'required': False},
+        }
 
 
 class OrderSerializer(serializers.ModelSerializer):

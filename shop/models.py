@@ -158,3 +158,35 @@ class Payment(models.Model):
 
     def __str__(self):
         return f'Payment for Order #{self.order.id} - {self.method}'
+
+
+class FormSubmission(models.Model):
+    """Generic form submissions from the storefront (contact, onboarding, etc.).
+
+    Allows anonymous public submissions via the API; staff/admins can review
+    and manage them through the Django admin or REST API.
+    """
+    FORM_TYPE_CHOICES = (
+        ('contact', 'Contact'),
+        ('onboarding', 'Distributor Onboarding'),
+        ('find_school_list', 'Find My School List'),
+        ('upload_list', 'Upload My School List'),
+        ('track_order', 'Track Your Order'),
+    )
+    STATUS_CHOICES = (
+        ('new', 'New'),
+        ('reviewed', 'Reviewed'),
+        ('resolved', 'Resolved'),
+    )
+    form_type = models.CharField(max_length=50, choices=FORM_TYPE_CHOICES)
+    data = models.JSONField()
+    file = models.FileField(upload_to='form_submissions/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'FormSubmission #{self.id} - {self.get_form_type_display()}'
