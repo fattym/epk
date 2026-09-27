@@ -25,7 +25,7 @@ class Product(models.Model):
         ('percentage', 'Percentage'),
         ('fixed', 'Fixed Amount'),
     )
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='products')
+    school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
