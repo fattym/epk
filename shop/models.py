@@ -25,6 +25,11 @@ class Product(models.Model):
         ('percentage', 'Percentage'),
         ('fixed', 'Fixed Amount'),
     )
+    PRODUCT_TYPE_CHOICES = (
+        ('physical', 'Physical'),
+        ('digital', 'Digital'),
+        ('service', 'Service'),
+    )
     school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=200)
@@ -38,6 +43,22 @@ class Product(models.Model):
     markup_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_reseller_listing = models.BooleanField(default=False)
+    sku = models.CharField(max_length=60, blank=True)
+    brand = models.CharField(max_length=100, blank=True)
+    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPE_CHOICES, default='physical', blank=True)
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    low_stock_threshold = models.PositiveIntegerField(default=0)
+    backorders = models.BooleanField(default=False)
+    shipping_weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    shipping_length = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    shipping_width = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    shipping_height = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    tags = models.ManyToManyField('shop.Tag', blank=True, related_name='products')
+    learning_areas = models.ManyToManyField('academics.LearningArea', blank=True, related_name='shop_products')
+    institution_categories = models.JSONField(
+        default=list, blank=True,
+        help_text="e.g. ['Pre-Primary','Primary School','University','TVET / Vocational']",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -65,6 +86,8 @@ class Product(models.Model):
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
     label = models.CharField(max_length=50)
+    size = models.CharField(max_length=50, blank=True)
+    color = models.CharField(max_length=50, blank=True)
     stock_quantity = models.PositiveIntegerField(default=0)
     price_override = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
@@ -78,6 +101,30 @@ class ProductVariant(models.Model):
     @property
     def effective_price(self):
         return self.price_override if self.price_override is not None else self.product.price
+
+
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class ProductImage(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='shop/products/gallery/%Y/')
+    alt = models.CharField(max_length=120, blank=True)
+    is_primary = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f'Image for {self.product}'
 
 
 class Order(models.Model):

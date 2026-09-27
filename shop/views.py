@@ -6,9 +6,15 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment, FormSubmission
+import csv
+import re
+from io import StringIO, BytesIO
+from openpyxl import load_workbook
+from academics.models import Grade, LearningArea
+from .models import ProductCategory, Product, ProductVariant, ProductImage, Tag, Order, OrderItem, Payment, FormSubmission
 from .serializers import (
     ProductCategorySerializer, ProductSerializer, ProductVariantSerializer,
+    ProductImageSerializer, TagSerializer,
     OrderSerializer, OrderCreateSerializer, GuestOrderCreateSerializer,
     OrderItemSerializer, PaymentSerializer, FormSubmissionSerializer,
 )
@@ -112,6 +118,204 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(product)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def upload_images(self, request, pk=None):
+        product = self.get_object()
+        files = request.FILES.getlist('files')
+        if not files:
+            return Response({'detail': 'No files provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not product.image and files:
+            product.image = files[0]
+            product.save()
+        primary_exists = product.images.filter(is_primary=True).exists()
+        order = product.images.count()
+        for index, f in enumerate(files):
+            ProductImage.objects.create(
+                product=product,
+                image=f,
+                is_primary=not primary_exists and index == 0,
+                order=order + index,
+            )
+        serializer = ProductImageSerializer(product.images.all(), many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def import_products(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({'detail': 'Staff permission required.'}, status=status.HTTP_403_FORBIDDEN)
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'No file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        rows, error = self._rows_from_file(file)
+        if rows is None:
+            return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        grades = list(Grade.objects.all())
+        grade_by_name = {g.name.lower(): g for g in grades}
+        stage_labels = {
+            'pre_primary': ['pre-primary', 'kindergarten', 'pre primary'],
+            'primary': ['primary school', 'primary'],
+            'junior_secondary': ['junior secondary school', 'jss', 'junior secondary'],
+            'senior_secondary': ['senior secondary school', 'sss', 'senior secondary'],
+        }
+        stage_lookup = {label: stage for stage, labels in stage_labels.items() for label in labels}
+        for g in grades:
+            for label in stage_labels.get(g.stage, []):
+                stage_lookup[label] = g.stage
+            stage_lookup[g.stage] = g.stage
+
+        categories = list(ProductCategory.objects.all())
+        cat_by_name = {c.name.lower(): c for c in categories}
+        areas = list(LearningArea.objects.filter(school=request.user.school))
+        area_by_name = {la.name.lower(): la for la in areas}
+
+        created = 0
+        failed = 0
+        errors = []
+        for row in rows:
+            ok, data_or_err = self._build_product_data(
+                row, grades, grade_by_name, stage_lookup, cat_by_name, area_by_name
+            )
+            if not ok:
+                failed += 1
+                errors.append({**{'name': (row.get('name') or '').strip()}, **data_or_err})
+                continue
+            serializer = self.get_serializer(data=data_or_err, context={'request': request})
+            if serializer.is_valid():
+                serializer.save(school=request.user.school)
+                created += 1
+            else:
+                failed += 1
+                errors.append({'name': (row.get('name') or '').strip(), 'errors': serializer.errors})
+        return Response({'created': created, 'failed': failed, 'errors': errors}, status=status.HTTP_201_CREATED)
+
+    def _rows_from_file(self, file):
+        name = (file.name or '').lower()
+        try:
+            if name.endswith('.csv'):
+                text = file.read().decode('utf-8-sig')
+                reader = csv.DictReader(StringIO(text))
+                return list(reader), None
+            if name.endswith(('.xlsx', '.xls')):
+                wb = load_workbook(BytesIO(file.read()), read_only=True)
+                ws = wb.active
+                rows = []
+                for r_idx, row in enumerate(ws.iter_rows(values_only=True)):
+                    if r_idx == 0:
+                        headers = [self._cell_str(h) for h in row]
+                        continue
+                    rows.append(dict(zip(headers, [self._cell_str(v) for v in row])))
+                return rows, None
+            return None, 'Unsupported file type. Use .csv or .xlsx.'
+        except Exception as exc:
+            return None, f'Failed to parse file: {exc}'
+
+    @staticmethod
+    def _cell_str(value):
+        if value is None:
+            return ''
+        if isinstance(value, bool):
+            return 'true' if value else 'false'
+        return str(value)
+
+    def _build_product_data(self, row, grades, grade_by_name, stage_lookup, cat_by_name, area_by_name):
+        def col(*keys):
+            for k in keys:
+                if k in row and row[k] not in (None, ''):
+                    return row[k]
+            return ''
+
+        name = (col('name') or '').strip()
+        if not name:
+            return False, {'skip': 'missing name'}
+        category_name = (col('category', 'category_name', 'product_category') or '').strip()
+        category = cat_by_name.get(category_name.lower())
+        if not category and category_name:
+            leaf = category_name.split('>')[-1].strip().lower()
+            category = cat_by_name.get(leaf)
+        category_id = category.id if category else None
+
+        tokens = lambda key: [t.strip() for t in re.split(r'[;,]', col(key) or '') if t.strip()]
+        institution_categories = tokens('institution_categories') or tokens('category_of_institution') or tokens('institution_category')
+        institutions = [t for t in institution_categories if t]
+
+        grade_ids = []
+        for token in tokens('grade_levels') or tokens('grades') or tokens('applicable_levels'):
+            low = token.lower()
+            if low in stage_lookup:
+                stage = stage_lookup[low]
+                grade_ids += [g.id for g in grades if g.stage == stage]
+            else:
+                g = grade_by_name.get(low)
+                if g:
+                    grade_ids.append(g.id)
+                else:
+                    for cand in grade_by_name.values():
+                        if low in cand.name.lower():
+                            grade_ids.append(cand.id)
+        grade_ids = list(dict.fromkeys(grade_ids))
+
+        la_ids = []
+        for token in tokens('learning_areas') or tokens('subjects') or tokens('learning_area'):
+            la = area_by_name.get(token.lower())
+            if not la:
+                for cand in area_by_name.values():
+                    if token.lower() in cand.name.lower():
+                        la = cand
+                        break
+            if la:
+                la_ids.append(la.id)
+        la_ids = list(dict.fromkeys(la_ids))
+
+        tag_names = [t for t in tokens('tags') if t]
+
+        variants = []
+        raw_variants = col('variants')
+        if raw_variants:
+            for chunk in raw_variants.split(';'):
+                parts = [p.strip() for p in chunk.split(',')]
+                if len(parts) >= 4:
+                    variants.append({
+                        'label': parts[0] or 'Default',
+                        'size': parts[1] or '',
+                        'color': parts[2] or '',
+                        'stock_quantity': int(float(parts[3])),
+                    })
+        else:
+            stock = col('stock_quantity', 'stock')
+            if stock:
+                variants.append({'label': 'Default', 'size': '', 'color': '', 'stock_quantity': int(float(stock))})
+
+        pub = (col('publish', 'status', 'published') or '').lower()
+        is_active = pub in ('publish', 'published', 'true', 'yes', 'active', '1')
+
+        pt_raw = (col('product_type', 'type') or 'physical').lower()
+        product_type = pt_raw if pt_raw in ('physical', 'digital', 'service') else 'physical'
+
+        data = {
+            'name': name,
+            'category': category_id,
+            'price': col('price', 'selling_price', 'selling price', 'amount'),
+            'description': col('description') or '',
+            'is_active': is_active,
+            'product_type': product_type,
+            'sku': col('sku'),
+            'brand': col('brand'),
+            'cost_price': col('cost_price'),
+            'low_stock_threshold': col('low_stock_threshold', 'low_stock') or 0,
+            'backorders': str(col('backorders', 'allow_backorders')).lower() in ('true', 'yes', '1'),
+            'shipping_weight': col('shipping_weight'),
+            'shipping_length': col('shipping_length'),
+            'shipping_width': col('shipping_width'),
+            'shipping_height': col('shipping_height'),
+            'applicable_levels': grade_ids,
+            'learning_areas': la_ids,
+            'tags_data': tag_names,
+            'institution_categories': institutions,
+            'variants_data': variants,
+        }
+        return True, data
 
 
 class ProductVariantViewSet(viewsets.ModelViewSet):

@@ -1,28 +1,95 @@
 from rest_framework import serializers
-from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment, FormSubmission
+from .models import (
+    ProductCategory, Product, ProductVariant, ProductImage, Tag,
+    Order, OrderItem, Payment, FormSubmission,
+)
+from academics.models import LearningArea, Grade
 from tenants.models import School
 import uuid
+
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ['id', 'name']
+
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = ['id', 'product', 'image', 'alt', 'is_primary', 'order']
+        read_only_fields = ['id', 'product']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        image = data.get('image')
+        if image and request is not None:
+            data['image_url'] = request.build_absolute_uri(image) if not image.startswith('http') else image
+        return data
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
-        fields = ['id', 'product', 'label', 'stock_quantity', 'price_override', 'effective_price']
-        read_only_fields = ['id', 'effective_price']
+        fields = ['id', 'product', 'label', 'size', 'color', 'stock_quantity', 'price_override', 'effective_price']
+        read_only_fields = ['id', 'product', 'effective_price']
 
 
 class ProductSerializer(serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, read_only=True)
+    images = ProductImageSerializer(many=True, read_only=True)
+    tags = TagSerializer(many=True, read_only=True)
     effective_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
     linked_distributor_product_name = serializers.CharField(source='linked_distributor_product.name', read_only=True)
     distributor_price = serializers.DecimalField(source='linked_distributor_product.unit_price', max_digits=10, decimal_places=2, read_only=True)
     distributor_name = serializers.CharField(source='linked_distributor_product.distributor.company_name', read_only=True)
+    applicable_levels = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Grade.objects.all(), required=False)
+    learning_areas = serializers.PrimaryKeyRelatedField(many=True, queryset=LearningArea.objects.all(), required=False)
+    variants_data = serializers.JSONField(write_only=True, required=False)
+    tags_data = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = Product
-        fields = ['id', 'school', 'category', 'category_name', 'name', 'description', 'price', 'effective_price', 'image', 'applicable_levels', 'is_active', 'created_at', 'variants', 'linked_distributor_product', 'linked_distributor_product_name', 'distributor_name', 'distributor_price', 'commission_amount', 'markup_type', 'markup_value', 'is_reseller_listing']
-        read_only_fields = ['id', 'created_at', 'school', 'effective_price', 'linked_distributor_product_name', 'distributor_price', 'distributor_name', 'commission_amount']
+        fields = [
+            'id', 'school', 'category', 'category_name', 'name', 'description', 'price',
+            'effective_price', 'image', 'applicable_levels', 'is_active',
+            'created_at', 'variants', 'images', 'tags', 'linked_distributor_product',
+            'linked_distributor_product_name', 'distributor_name', 'distributor_price',
+            'commission_amount', 'markup_type', 'markup_value', 'is_reseller_listing',
+            'sku', 'brand', 'product_type', 'cost_price', 'low_stock_threshold',
+  'backorders', 'shipping_weight', 'shipping_length', 'shipping_width',
+  'shipping_height', 'learning_areas', 'institution_categories', 'variants_data', 'tags_data',
+]
+        read_only_fields = [
+            'id', 'created_at', 'school', 'effective_price',
+            'linked_distributor_product_name', 'distributor_price', 'distributor_name',
+            'commission_amount', 'variants', 'images', 'tags',
+        ]
+
+    def _create_nested(self, product, variants_data, tags_data):
+        if variants_data:
+            for v in variants_data:
+                ProductVariant.objects.create(product=product, **v)
+        if tags_data:
+            for name in tags_data:
+                tag, _ = Tag.objects.get_or_create(name=name)
+                product.tags.add(tag)
+        return product
+
+    def create(self, validated_data):
+        variants_data = validated_data.pop('variants_data', None)
+        tags_data = validated_data.pop('tags_data', None)
+        product = super().create(validated_data)
+        return self._create_nested(product, variants_data, tags_data)
+
+    def update(self, instance, validated_data):
+        variants_data = validated_data.pop('variants_data', None)
+        tags_data = validated_data.pop('tags_data', None)
+        product = super().update(instance, validated_data)
+        return self._create_nested(product, variants_data, tags_data)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
