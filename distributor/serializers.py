@@ -7,15 +7,35 @@ from .models import (
 
 class DistributorProfileSerializer(serializers.ModelSerializer):
     wallet_balance = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+    product_count = serializers.SerializerMethodField()
+    order_count = serializers.SerializerMethodField()
+    total_earned = serializers.SerializerMethodField()
 
     class Meta:
         model = DistributorProfile
-        fields = ['id', 'user', 'company_name', 'registration_number', 'address', 'phone', 'email', 'logo', 'is_verified', 'is_suspended', 'created_at', 'updated_at', 'wallet_balance']
-        read_only_fields = ['id', 'user', 'is_verified', 'is_suspended', 'created_at', 'updated_at', 'wallet_balance']
+        fields = ['id', 'user', 'company_name', 'registration_number', 'address', 'phone', 'email', 'logo', 'is_verified', 'is_suspended', 'created_at', 'updated_at', 'wallet_balance', 'owner_name', 'product_count', 'order_count', 'total_earned']
+        read_only_fields = ['id', 'user', 'is_verified', 'is_suspended', 'created_at', 'updated_at', 'wallet_balance', 'owner_name', 'product_count', 'order_count', 'total_earned']
 
     def get_wallet_balance(self, obj):
         try:
             return str(obj.wallet.balance)
+        except DistributorWallet.DoesNotExist:
+            return '0.00'
+
+    def get_owner_name(self, obj):
+        u = obj.user
+        return f"{u.first_name} {u.last_name}".strip() or u.email
+
+    def get_product_count(self, obj):
+        return obj.products.count()
+
+    def get_order_count(self, obj):
+        return obj.orders.count()
+
+    def get_total_earned(self, obj):
+        try:
+            return str(obj.wallet.total_earned)
         except DistributorWallet.DoesNotExist:
             return '0.00'
 

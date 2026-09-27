@@ -12,6 +12,7 @@ from .serializers import (
     OrderSerializer, OrderCreateSerializer, GuestOrderCreateSerializer,
     OrderItemSerializer, PaymentSerializer, FormSubmissionSerializer,
 )
+from accounts.permissions import IsAdminOrReadOnly
 from fees.models import Invoice
 from distributor.models import DistributorProduct
 import uuid
@@ -44,7 +45,10 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ProductCategory.objects.filter(school=self.request.user.school)
+        user = self.request.user
+        if user.is_superuser:
+            return ProductCategory.objects.all()
+        return ProductCategory.objects.filter(school=user.school)
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
@@ -62,7 +66,10 @@ class ProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['category', 'is_active', 'applicable_levels', 'is_reseller_listing']
 
     def get_queryset(self):
-        return Product.objects.filter(school=self.request.user.school)
+        user = self.request.user
+        if user.is_superuser:
+            return Product.objects.all()
+        return Product.objects.filter(school=user.school)
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
@@ -150,6 +157,8 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if user.is_superuser:
+            return Order.objects.all()
         if user.role == 'PARENT':
             return Order.objects.filter(parent=user)
         return Order.objects.filter(school=user.school)
@@ -285,6 +294,56 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.picked_up_by_staff = request.user
         order.save()
         return Response({'detail': 'Order marked as picked up'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminOrReadOnly])
+    def release_funds(self, request, pk=None):
+        from .signals import credit_distributor_wallet
+        order = self.get_object()
+        if getattr(order, 'fund_status', 'HELD') != 'HELD':
+            return Response({'detail': 'Funds are not held for this order.'}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status != 'delivered':
+            return Response({'detail': 'Delivery must be confirmed before funds can be released.'}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(order, 'disputed', False):
+            return Response({'detail': 'Order is disputed; resolve the dispute before releasing funds.'}, status=status.HTTP_400_BAD_REQUEST)
+        amount = credit_distributor_wallet(order)
+        order.fund_status = 'RELEASED'
+        order.released_at = timezone.now()
+        order.released_by = request.user
+        order.save(update_fields=['fund_status', 'released_at', 'released_by'])
+        return Response({'detail': 'Funds released to distributor', 'fund_status': 'RELEASED', 'amount': str(amount or 0), 'released_at': order.released_at})
+
+    @action(detail=True, methods=['post'])
+    def confirm_delivery(self, request, pk=None):
+        order = self.get_object()
+        if order.status not in ('paid', 'ready_for_pickup', 'picked_up'):
+            return Response({'detail': 'Order must be paid (and picked up) before confirming delivery.'}, status=status.HTTP_400_BAD_REQUEST)
+        order.status = 'delivered'
+        order.delivery_confirmed_at = timezone.now()
+        order.save(update_fields=['status', 'delivery_confirmed_at'])
+        return Response({'detail': 'Delivery confirmed', 'order_status': 'delivered', 'fund_status': order.fund_status or 'HELD'})
+
+    @action(detail=True, methods=['post'])
+    def dispute(self, request, pk=None):
+        order = self.get_object()
+        reason = (request.data.get('reason') or '')[:500]
+        if not reason:
+            return Response({'detail': 'A dispute reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        order.disputed = True
+        order.dispute_reason = reason
+        if 'image' in request.data:
+            order.dispute_evidence = request.data.get('image')
+        order.save(update_fields=['disputed', 'dispute_reason', 'dispute_evidence'])
+        return Response({'detail': 'Order reported; funds remain held', 'disputed': True})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminOrReadOnly])
+    def refund(self, request, pk=None):
+        order = self.get_object()
+        if getattr(order, 'fund_status', 'HELD') == 'RELEASED':
+            return Response({'detail': 'Funds already released; process a refund through the distributor.'}, status=status.HTTP_400_BAD_REQUEST)
+        order.fund_status = 'REFUNDED'
+        order.status = 'cancelled'
+        order.save(update_fields=['fund_status', 'status'])
+        return Response({'detail': 'Order refunded; funds held and returned to the customer flow', 'fund_status': 'REFUNDED'})
 
 
 class GuestOrderViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

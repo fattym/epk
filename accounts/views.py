@@ -58,6 +58,8 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if user.is_superuser:
+            return User.objects.all()
         if user.role == 'ADMIN':
             return User.objects.filter(school=user.school)
         return User.objects.filter(id=user.id)

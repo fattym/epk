@@ -64,16 +64,40 @@ class ParentShopCommissionTest(TestCase):
         self.assertEqual(resp.status_code, 200, resp.json())
         self.assertEqual(resp.json()['order_status'], 'paid')
 
-        # 3. The commission (50 per unit * 2) is credited to the distributor wallet.
+        # 3. Escrow: funds are HELD, the commission is calculated but NOT yet
+        #    paid out to the distributor wallet.
         order.refresh_from_db()
+        self.assertEqual(order.fund_status, 'HELD')
+        self.assertEqual(order.commission_earned, Decimal('100.00'))  # 50 * 2
         wallet = DistributorWallet.objects.get(distributor=self.profile)
+        self.assertEqual(wallet.balance, Decimal('0.00'))
+        self.assertFalse(
+            WalletTransaction.objects.filter(order=order, transaction_type='CREDIT').exists())
+
+        # 4. Customer confirms delivery -> status becomes 'delivered'.
+        resp = client.post(f'/api/shop/orders/{order.id}/confirm_delivery/', {}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.json())
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'delivered')
+
+        # 5. A staff user (admin) releases the held funds.
+        staff = User.objects.create_user(
+            email='admin@ccke.com', password='pass1234', role='ADMIN',
+            school=self.school, is_staff=True)
+        staff_client = self._api(staff)
+        resp = staff_client.post(f'/api/shop/orders/{order.id}/release_funds/', {}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.json())
+        order.refresh_from_db()
+        self.assertEqual(order.fund_status, 'RELEASED')
+        self.assertIsNotNone(order.released_at)
+        self.assertEqual(order.released_by, staff)
+        wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal('100.00'))
         self.assertEqual(wallet.total_earned, Decimal('100.00'))
-        self.assertEqual(order.commission_earned, Decimal('100.00'))
         self.assertTrue(
             WalletTransaction.objects.filter(order=order, transaction_type='CREDIT', amount=100).exists())
 
-    def test_fee_balance_payment_credits_wallet(self):
+    def test_fee_balance_payment_holds_funds(self):
         client = self._api(self.parent)
         resp = client.post('/api/shop/orders/', {
             'learner': self.learner.id,
@@ -81,8 +105,11 @@ class ParentShopCommissionTest(TestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         order = Order.objects.get()
-        # Pay via fee balance -> confirmed immediately -> signal credits the wallet
+        # Pay via fee balance -> confirmed immediately -> funds are HELD (no wallet credit yet)
         resp = client.post(f'/api/shop/orders/{order.id}/pay_fee_balance/', {}, format='json')
         self.assertEqual(resp.status_code, 200, resp.json())
+        order.refresh_from_db()
+        self.assertEqual(order.fund_status, 'HELD')
+        self.assertEqual(order.commission_earned, Decimal('50.00'))
         wallet = DistributorWallet.objects.get(distributor=self.profile)
-        self.assertEqual(wallet.balance, Decimal('50.00'))
+        self.assertEqual(wallet.balance, Decimal('0.00'))

@@ -97,8 +97,8 @@ class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ['id', 'learning_area', 'author', 'teacher', 'grade', 'grade_name', 'stream', 'stream_name', 'term', 'term_name', 'year', 'title', 'description', 'status', 'delivery_mode',
-                  'available_from', 'requires_parent_unlock', 'section', 'room', 'course_code', 'allow_student_posts', 'core_competencies', 'values', 'pcis', 'cloned_from', 'version', 'lessons', 'enrollments', 'teacher_name']
-        read_only_fields = ['author', 'cloned_from', 'version', 'status', 'course_code']
+                  'available_from', 'requires_parent_unlock', 'section', 'room', 'course_code', 'allow_student_posts', 'core_competencies', 'values', 'pcis', 'cloned_from', 'version', 'lessons', 'enrollments', 'teacher_name', 'created_at']
+        read_only_fields = ['author', 'cloned_from', 'version', 'status', 'course_code', 'created_at']
 
     def get_grade_name(self, obj):
         return obj.grade.name if obj.grade else None

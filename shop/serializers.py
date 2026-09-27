@@ -101,8 +101,8 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'parent', 'learner', 'learner_name', 'school', 'status', 'pickup_code', 'total_amount', 'commission_earned', 'created_at', 'picked_up_at', 'items', 'payment', 'delivery_name', 'delivery_phone', 'delivery_address', 'delivery_county', 'delivery_notes']
-        read_only_fields = ['id', 'created_at', 'pickup_code', 'school', 'commission_earned']
+        fields = ['id', 'parent', 'learner', 'learner_name', 'school', 'status', 'pickup_code', 'total_amount', 'commission_earned', 'created_at', 'picked_up_at', 'items', 'payment', 'delivery_name', 'delivery_phone', 'delivery_address', 'delivery_county', 'delivery_notes', 'fund_status', 'released_at', 'released_by', 'delivery_confirmed_at', 'disputed', 'dispute_reason', 'dispute_evidence']
+        read_only_fields = ['id', 'created_at', 'pickup_code', 'school', 'commission_earned', 'fund_status', 'released_at', 'released_by', 'delivery_confirmed_at', 'disputed', 'dispute_reason']
 
     def get_learner_name(self, obj):
         if obj.learner_id:

@@ -86,7 +86,13 @@ class Order(models.Model):
         ('paid', 'Paid'),
         ('ready_for_pickup', 'Ready for Pickup'),
         ('picked_up', 'Picked Up'),
+        ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
+    )
+    FUND_STATUS_CHOICES = (
+        ('HELD', 'Held'),
+        ('RELEASED', 'Released'),
+        ('REFUNDED', 'Refunded'),
     )
     parent = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='parent_orders', null=True, blank=True, help_text='Null for guest (no-account) orders.')
     learner = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='learner_orders', null=True, blank=True)
@@ -104,6 +110,13 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     picked_up_at = models.DateTimeField(null=True, blank=True)
     picked_up_by_staff = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders_processed')
+    fund_status = models.CharField(max_length=10, choices=FUND_STATUS_CHOICES, default='HELD', help_text='Escrow state of the order funds. HELD until delivery is confirmed and an admin releases the funds to the distributor.')
+    released_at = models.DateTimeField(null=True, blank=True)
+    released_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='released_orders')
+    delivery_confirmed_at = models.DateTimeField(null=True, blank=True)
+    disputed = models.BooleanField(default=False)
+    dispute_reason = models.TextField(blank=True)
+    dispute_evidence = models.ImageField(upload_to='disputes/', blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']

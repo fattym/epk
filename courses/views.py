@@ -31,6 +31,8 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if user.is_superuser:
+            return Course.objects.all()
         qs = Course.objects.filter(school=user.school)
 
         if user.role == 'TEACHER':
