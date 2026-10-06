@@ -8,6 +8,7 @@ from academics.models import LearningOutcome, Term
 from accounts.models import User
 
 from .models import CompetencyAssessment, LearnerPortfolio, AssessmentEvidence, teacher_can_assess
+from accounts.models import ParentLearner
 from .serializers import (
     CompetencyAssessmentSerializer,
     LearnerPortfolioSerializer,
@@ -48,6 +49,11 @@ class CompetencyAssessmentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role == 'TEACHER':
             return CompetencyAssessment.objects.filter(assessed_by=user, learner__school=user.school)
+        if user.role == 'PARENT':
+            learner_ids = ParentLearner.objects.filter(parent=user).values_list('learner_id', flat=True)
+            return CompetencyAssessment.objects.filter(learner_id__in=learner_ids)
+        if user.role == 'STUDENT':
+            return CompetencyAssessment.objects.filter(learner=user)
         return CompetencyAssessment.objects.filter(learner__school=user.school)
 
 

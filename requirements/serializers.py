@@ -10,12 +10,26 @@ class RequiredItemOptionSerializer(serializers.ModelSerializer):
 
 
 class RequiredItemSerializer(serializers.ModelSerializer):
+    class_level_name = serializers.SerializerMethodField()
+    term_name = serializers.SerializerMethodField()
     options = RequiredItemOptionSerializer(many=True, read_only=True)
 
     class Meta:
         model = RequiredItem
-        fields = ['id', 'school', 'name', 'description', 'class_level', 'term', 'is_mandatory', 'allow_external_purchase', 'preferred_source', 'is_published', 'created_at', 'updated_at', 'options']
+        fields = ['id', 'school', 'name', 'description', 'class_level', 'class_level_name', 'term', 'term_name', 'is_mandatory', 'allow_external_purchase', 'preferred_source', 'is_published', 'created_at', 'updated_at', 'options']
         read_only_fields = ['id', 'school', 'created_at', 'updated_at']
+
+    def get_class_level_name(self, obj):
+        try:
+            return obj.class_level.name
+        except AttributeError:
+            return None
+
+    def get_term_name(self, obj):
+        try:
+            return obj.term.name
+        except AttributeError:
+            return None
 
 
 class RequiredItemCreateSerializer(serializers.ModelSerializer):

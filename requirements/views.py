@@ -86,7 +86,13 @@ class PublicRequiredItemViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = RequiredItem.objects.filter(is_published=True).select_related('class_level', 'term').prefetch_related('options__distributor')
+        school_id = self.request.query_params.get('school_id')
+        if school_id:
+            queryset = queryset.filter(school_id=school_id)
         learner_id = self.request.query_params.get('learner_id')
         if learner_id:
-            queryset = queryset.filter(class_level__enrollments__student_id=learner_id, class_level__enrollments__is_active=True).distinct()
+            queryset = queryset.filter(
+                class_level__streams__enrollments__student_id=learner_id,
+                class_level__streams__enrollments__is_active=True,
+            ).distinct()
         return queryset

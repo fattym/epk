@@ -2,13 +2,6 @@ from rest_framework import serializers
 from .models import User, ParentLearner, StudentProfile, TeacherProfile
 
 
-class ParentLearnerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ParentLearner
-        fields = ['id', 'parent', 'learner', 'school', 'relationship', 'created_at']
-        read_only_fields = ['id', 'created_at', 'school']
-
-
 class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentProfile
@@ -51,6 +44,16 @@ class UserSerializer(serializers.ModelSerializer):
             profile.save()
             
         return instance
+
+
+class ParentLearnerSerializer(serializers.ModelSerializer):
+    learner = UserSerializer(read_only=True)
+    parent = UserSerializer(read_only=True)
+
+    class Meta:
+        model = ParentLearner
+        fields = ['id', 'parent', 'learner', 'school', 'relationship', 'created_at']
+        read_only_fields = ['id', 'created_at', 'school']
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
