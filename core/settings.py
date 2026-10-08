@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'reports',
     'notices',
     'courses',
+    'transport',
 ]
 
 MIDDLEWARE = [

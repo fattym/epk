@@ -32,6 +32,7 @@ class User(AbstractUser):
         ('STUDENT', 'Student'),
         ('PARENT', 'Parent'),
         ('STAFF', 'Staff'),
+        ('DRIVER', 'Driver'),
         ('DISTRIBUTOR', 'Distributor'),
     )
     username = None

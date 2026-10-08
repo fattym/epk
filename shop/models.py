@@ -232,6 +232,8 @@ class FormSubmission(models.Model):
         ('find_school_list', 'Find My School List'),
         ('upload_list', 'Upload My School List'),
         ('track_order', 'Track Your Order'),
+        ('lead', 'Homepage Lead'),
+        ('demo', 'Demo Request'),
     )
     STATUS_CHOICES = (
         ('new', 'New'),

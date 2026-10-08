@@ -26,3 +26,8 @@ class IsParent(permissions.BasePermission):
 class IsStaff(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user.role in ['STAFF', 'ADMIN']
+
+
+class IsDriver(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user.role == 'DRIVER'
