@@ -4,11 +4,13 @@ from .views import (
     CompetencyAssessmentViewSet,
     LearnerPortfolioViewSet,
     AssessmentEvidenceViewSet,
+    AssessmentTaskViewSet,
     BulkAssessmentView,
 )
 
 router = DefaultRouter()
 router.register(r'assessments', CompetencyAssessmentViewSet)
+router.register(r'tasks', AssessmentTaskViewSet, basename='assessment-task')
 router.register(r'portfolios', LearnerPortfolioViewSet)
 router.register(r'evidence', AssessmentEvidenceViewSet)
 

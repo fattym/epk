@@ -46,7 +46,8 @@ class BusAdmin(admin.ModelAdmin):
 
 @admin.register(BusAssignment)
 class BusAssignmentAdmin(admin.ModelAdmin):
-    list_display = ['bus', 'student', 'school', 'start_date', 'end_date', 'is_active']
+    list_display = ['bus', 'student', 'school', 'start_date', 'end_date', 'is_active',
+                    'pickup_latitude', 'pickup_longitude']
     list_filter = ['school', 'is_active', 'bus']
     search_fields = ['bus__plate_number', 'student__email']
 

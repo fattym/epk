@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     RouteViewSet, BusStopViewSet, BusViewSet,
-    BusAssignmentViewSet, BusLocationView, DriverAssignmentView,
+    BusAssignmentViewSet, BusLocationView, DriverAssignmentView, DriverStudentsView,
 )
 
 router = DefaultRouter()
@@ -15,4 +15,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('locations/<int:school_id>/', BusLocationView.as_view(), name='bus-locations'),
     path('driver/assignment/', DriverAssignmentView.as_view(), name='driver-assignment'),
+    path('driver/students/', DriverStudentsView.as_view(), name='driver-students'),
 ]

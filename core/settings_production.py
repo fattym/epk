@@ -22,15 +22,23 @@ DEBUG = False
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
-    ALLOWED_HOSTS = ['codingclubskenya.com',
-    'www.codingclubskenya.com',
-    '213.199.41.219',
-    'localhost',
-    '127.0.0.1',
-    '*',  ]
+    ALLOWED_HOSTS = [
+        'codingclubskenya.com',
+        'www.codingclubskenya.com',
+        '213.199.41.219',
+        'localhost',
+        '127.0.0.1',
+    ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://' + host for host in ALLOWED_HOSTS if not host.startswith('localhost')
+    'https://' + host for host in ALLOWED_HOSTS
+    if not host.startswith('localhost') and not host.startswith('127.0.0.1')
+]
+
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesBackend',
+    'django.contrib.auth.backends.ModelBackend',
+    'guardian.backends.ObjectPermissionBackend',
 ]
 
 INSTALLED_APPS = [
@@ -46,6 +54,8 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_spectacular',
     'corsheaders',
+    'axes',
+    'guardian',
     'tenants',
     'accounts',
     'academics',
@@ -67,10 +77,16 @@ INSTALLED_APPS = [
     'reports',
     'notices',
     'courses',
+    'health',
+    'discipline',
+    'alumni',
+    'parent_meetings',
+    'payroll',
 ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'axes.middleware.AxesMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -159,6 +175,14 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/hour',
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -178,20 +202,56 @@ SIMPLE_JWT = {
 
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_WORKER_PREFETCH_MULTIPLIER = 4
 
-MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
-MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
-MPESA_BUSINESS_SHORTCODE = os.environ.get('MPESA_BUSINESS_SHORTCODE', '')
-MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
-MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL', '')
-MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'sandbox')
+# Redis Configuration
+_REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+_REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
+_REDIS_DB_CACHE = os.environ.get('REDIS_DB_CACHE', '1')
+_REDIS_DB_SESSIONS = os.environ.get('REDIS_DB_SESSIONS', '2')
+_REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
 
-CHAMAGO_API_KEY = os.environ.get('CHAMAGO_API_KEY', '')
-CHAMAGO_API_URL = os.environ.get('CHAMAGO_API_URL', 'https://api.chamago.co.ke')
+_redis_url = f'redis://:{_REDIS_PASSWORD}@{_REDIS_HOST}:{_REDIS_PORT}' if _REDIS_PASSWORD else f'redis://{_REDIS_HOST}:{_REDIS_PORT}'
 
-AI_ASSIST_API_URL = os.environ.get('AI_ASSIST_API_URL', '')
-AI_ASSIST_API_KEY = os.environ.get('AI_ASSIST_API_KEY', '')
-AI_ASSIST_MODEL = os.environ.get('AI_ASSIST_MODEL', 'claude-3-5-sonnet-20240620')
+# Cache configuration using Redis
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': f'{_redis_url}/{_REDIS_DB_CACHE}',
+        'KEY_PREFIX': 'school_mgmt',
+        'TIMEOUT': 300,
+    },
+    'sessions': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': f'{_redis_url}/{_REDIS_DB_SESSIONS}',
+        'KEY_PREFIX': 'school_mgmt_sessions',
+        'TIMEOUT': 86400,
+    },
+}
+
+# Session configuration using Redis
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'sessions'
+SESSION_COOKIE_AGE = 86400
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_SAVE_EVERY_REQUEST = False
+
+# django-axes (brute-force protection)
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 300
+AXES_LOCKOUT_TEMPLATE = None
+AXES_LOCKOUT_CALLABLE = None
+AXES_USE_USER_AGENT = True
+AXES_LOCKOUT_PARAMETERS = ['ip_address']
+
+# django-guardian (object-level permissions)
+GUARDIAN_GET_CONTENT_TYPE_MODEL = 'contenttypes.ContentType'
+ANONYMOUS_USER_ID = -1
 
 SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000
@@ -200,9 +260,17 @@ SECURE_HSTS_PRELOAD = True
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+SECURE_CROSS_ORIGIN_EMBEDDER_POLICY = 'require-corp'
 
 SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+SECURE_REDIRECT_EXEMPT = []
 
 LOGGING = {
     'version': 1,

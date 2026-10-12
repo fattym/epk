@@ -231,3 +231,25 @@ class DriverAssignmentView(APIView):
             return Response({'detail': 'You are not assigned to any active bus.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = BusSerializer(bus)
         return Response(serializer.data)
+
+
+class DriverStudentsView(APIView):
+    """
+    Returns all students assigned to the requesting driver's active bus(es),
+    including each student's pickup location (latitude/longitude) for display
+    on a map. Available to drivers (and admins for oversight).
+    """
+    permission_classes = [IsAdminOrDriver]
+
+    def get(self, request):
+        user = request.user
+        assignments = (
+            BusAssignment.objects
+            .select_related('student', 'bus', 'bus__driver', 'bus__route')
+            .prefetch_related('bus__route__stops')
+            .filter(is_active=True, school=user.school)
+        )
+        if user.role == 'DRIVER':
+            assignments = assignments.filter(bus__driver=user)
+        serializer = BusAssignmentSerializer(assignments, many=True)
+        return Response(serializer.data)

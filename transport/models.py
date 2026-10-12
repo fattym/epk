@@ -83,6 +83,8 @@ class BusAssignment(models.Model):
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    pickup_latitude = models.FloatField(null=True, blank=True, help_text='Pickup location latitude')
+    pickup_longitude = models.FloatField(null=True, blank=True, help_text='Pickup location longitude')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

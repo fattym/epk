@@ -50,14 +50,16 @@ class BusAssignmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BusAssignment
-        fields = ['id', 'bus', 'student', 'school', 'start_date', 'end_date', 'is_active', 'created_at']
+        fields = ['id', 'bus', 'student', 'school', 'start_date', 'end_date', 'is_active',
+                  'pickup_latitude', 'pickup_longitude', 'created_at']
         read_only_fields = ['id', 'school', 'created_at']
 
 
 class BusAssignmentWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = BusAssignment
-        fields = ['id', 'bus', 'student', 'school', 'start_date', 'end_date', 'is_active']
+        fields = ['id', 'bus', 'student', 'school', 'start_date', 'end_date', 'is_active',
+                  'pickup_latitude', 'pickup_longitude']
         read_only_fields = ['id', 'school']
 
 

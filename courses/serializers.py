@@ -14,9 +14,62 @@ class TopicSerializer(serializers.ModelSerializer):
 
 
 class LearningMaterialSerializer(serializers.ModelSerializer):
+    learning_area_name = serializers.SerializerMethodField()
+    course_title = serializers.SerializerMethodField()
+    course_status = serializers.SerializerMethodField()
+    lesson_title = serializers.SerializerMethodField()
+    lesson_strand = serializers.SerializerMethodField()
+    grade_name = serializers.SerializerMethodField()
+    teacher_name = serializers.SerializerMethodField()
+    material_type_label = serializers.SerializerMethodField()
+
     class Meta:
         model = LearningMaterial
-        fields = ['id', 'lesson', 'material_type', 'title', 'content', 'file', 'url', 'order']
+        fields = [
+            'id', 'lesson', 'material_type', 'material_type_label', 'title', 'content',
+            'file', 'url', 'order',
+            'learning_area_name', 'course_title', 'course_status', 'lesson_title',
+            'lesson_strand', 'grade_name', 'teacher_name',
+        ]
+
+    def _course(self, obj):
+        try:
+            return obj.lesson.course
+        except Exception:
+            return None
+
+    def get_learning_area_name(self, obj):
+        c = self._course(obj)
+        return c.learning_area.name if c and c.learning_area else None
+
+    def get_course_title(self, obj):
+        c = self._course(obj)
+        return c.title if c else None
+
+    def get_course_status(self, obj):
+        c = self._course(obj)
+        return c.status if c else None
+
+    def get_lesson_title(self, obj):
+        return obj.lesson.title or None
+
+    def get_lesson_strand(self, obj):
+        return obj.lesson.strand or None
+
+    def get_grade_name(self, obj):
+        c = self._course(obj)
+        return c.grade.name if c and c.grade else None
+
+    def get_teacher_name(self, obj):
+        c = self._course(obj)
+        u = c.teacher or c.author
+        if not u:
+            return None
+        name = f"{u.first_name} {u.last_name}".strip()
+        return name or u.email
+
+    def get_material_type_label(self, obj):
+        return obj.get_material_type_display()
 
 
 class QuizQuestionSerializer(serializers.ModelSerializer):

@@ -17,19 +17,44 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     student_profile = StudentProfileSerializer(required=False)
     teacher_profile = TeacherProfileSerializer(required=False)
+    current_grade = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'phone', 'address', 'date_of_birth', 'school', 'created_at', 'tsc_number', 'qualification', 'subject_specializations', 'student_profile', 'teacher_profile', 'is_active', 'last_login']
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'phone', 'address', 'date_of_birth', 'school', 'created_at', 'tsc_number', 'qualification', 'subject_specializations', 'student_profile', 'teacher_profile', 'is_active', 'last_login', 'current_grade']
         read_only_fields = ['id', 'created_at', 'last_login']
+
+    def get_current_grade(self, obj):
+        if getattr(obj, 'role', None) != 'STUDENT':
+            return None
+        enrollment = (
+            obj.enrollments
+            .filter(is_active=True)
+            .select_related('stream__grade')
+            .first()
+        )
+        if not enrollment or not enrollment.stream:
+            return None
+        stream = enrollment.stream
+        grade_name = getattr(stream.grade, 'name', None) if stream.grade else None
+        return f'{grade_name} {stream.name}' if grade_name else stream.name
+
 
     def update(self, instance, validated_data):
         student_profile_data = validated_data.pop('student_profile', None)
         teacher_profile_data = validated_data.pop('teacher_profile', None)
-        
+
+        m2m_data = {}
+        for field in instance._meta.many_to_many:
+            if field.name in validated_data:
+                m2m_data[field.name] = validated_data.pop(field.name)
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        for field_name, value in m2m_data.items():
+            getattr(instance, field_name).set(value)
         
         if instance.role == 'STUDENT' and student_profile_data is not None:
             profile, created = StudentProfile.objects.get_or_create(user=instance, defaults={'school': instance.school})
