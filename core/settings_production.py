@@ -82,6 +82,8 @@ INSTALLED_APPS = [
     'alumni',
     'parent_meetings',
     'payroll',
+    'transport',
+    'gradebook',
 ]
 
 MIDDLEWARE = [
