@@ -47,6 +47,13 @@ INSTALLED_APPS = [
     'reports',
     'notices',
     'courses',
+    'health',
+    'discipline',
+    'alumni',
+    'parent_meetings',
+    'payroll',
+    'transport',
+    'gradebook',
 ]
 
 MIDDLEWARE = [
@@ -107,7 +114,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'accounts.User'
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -120,6 +130,14 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/hour',
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -146,6 +164,9 @@ MPESA_BUSINESS_SHORTCODE = ''
 MPESA_PASSKEY = ''
 MPESA_CALLBACK_URL = ''
 MPESA_ENVIRONMENT = 'sandbox'
+
+CHAMAGO_API_KEY = ''
+CHAMAGO_API_URL = 'https://api.chamago.co.ke'
 
 AI_ASSIST_API_URL = ''
 AI_ASSIST_API_KEY = ''

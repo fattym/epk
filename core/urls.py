@@ -1,6 +1,3 @@
-"""
-URL configuration for core project.
-"""
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
@@ -54,6 +51,14 @@ urlpatterns = [
     path('api/reports/', include('reports.urls')),
     path('api/notices/', include('notices.urls')),
     path('api/courses/', include('courses.urls')),
+    path('api/health/', include('health.urls')),
+    path('api/discipline/', include('discipline.urls')),
+    path('api/alumni/', include('alumni.urls')),
+    path('api/parent-meetings/', include('parent_meetings.urls')),
+    path('api/payroll/', include('payroll.urls')),
+    path('api/transport/', include('transport.urls')),
+    path('api/gradebook/', include('gradebook.urls')),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('schoolsystem/', lambda request: serve_frontend(request, 'index.html'), name='frontend'),

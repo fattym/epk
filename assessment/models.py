@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models import Q
 from django.core.exceptions import ValidationError
 from accounts.models import User
-from academics.models import LearningOutcome, Term, TeacherAssignment, Enrollment
+from academics.models import LearningArea, LearningOutcome, Term, TeacherAssignment, Enrollment
 
 
 def teacher_can_assess(user, learner, learning_area, term):
@@ -52,6 +52,60 @@ class CompetencyAssessment(models.Model):
 
     def __str__(self):
         return f'{self.learner} - {self.outcome} - {self.get_level_achieved_display()}'
+
+
+class AssessmentTask(models.Model):
+    """A formative assessment task definition (a task + the students assigned to it).
+
+    Mirrors the template's "Assessment Task Builder" (ASM-XX) entity: a learning
+    area, strand/sub-strand, task type, and the per-learner rubric results.
+    """
+    STATUS_DRAFT = 'DRAFT'
+    STATUS_ACTIVE = 'ACTIVE'
+    STATUS_COMPLETED = 'COMPLETED'
+    STATUS_CHOICES = (
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_ACTIVE, 'Active'),
+        (STATUS_COMPLETED, 'Completed'),
+    )
+    TASK_TYPE_CHOICES = (
+        ('PPT', 'Practical Performance Task'),
+        ('PBL', 'Project-Based Learning'),
+        ('OBS', 'Observation Rubric'),
+        ('TEST', 'Written Test'),
+    )
+
+    learning_area = models.ForeignKey(LearningArea, on_delete=models.CASCADE, related_name='tasks')
+    term = models.ForeignKey(Term, on_delete=models.CASCADE, related_name='assessment_tasks')
+    title = models.CharField(max_length=160)
+    task_type = models.CharField(max_length=10, choices=TASK_TYPE_CHOICES, default='PPT')
+    strand = models.CharField(max_length=160, blank=True)
+    sub_strand = models.CharField(max_length=160, blank=True)
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='created_tasks'
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.get_task_type_display()} - {self.title} - {self.learning_area}'
+
+
+class AssessmentTaskResult(models.Model):
+    """A single learner's recorded result against an AssessmentTask."""
+    task = models.ForeignKey(AssessmentTask, on_delete=models.CASCADE, related_name='results')
+    learner = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='assessment_task_results')
+    level_achieved = models.CharField(max_length=2, choices=CompetencyAssessment.LEVEL_CHOICES, default='ME')
+    remark = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ['task', 'learner']
+
+    def __str__(self):
+        return f'{self.learner} - {self.task} - {self.get_level_achieved_display()}'
 
 
 class AssessmentEvidence(models.Model):

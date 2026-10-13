@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from academics.models import Enrollment
+from accounts.models import User, ParentLearner
 from .models import Homework, HomeworkSubmission
 from .serializers import HomeworkSerializer, HomeworkSubmissionSerializer
 
@@ -22,6 +23,14 @@ class HomeworkViewSet(viewsets.ModelViewSet):
             enrolled = list(
                 Enrollment.objects.filter(
                     student=self.request.user, is_active=True
+                ).values_list('stream_id', flat=True)
+            )
+            return qs.filter(stream_id__in=enrolled)
+        if role == 'PARENT':
+            learner_ids = ParentLearner.objects.filter(parent=self.request.user).values_list('learner_id', flat=True)
+            enrolled = list(
+                Enrollment.objects.filter(
+                    student_id__in=learner_ids, is_active=True
                 ).values_list('stream_id', flat=True)
             )
             return qs.filter(stream_id__in=enrolled)

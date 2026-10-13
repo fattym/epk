@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.http import FileResponse, Http404
 from academics.models import SubStrand, LearningOutcome, Strand
 from .models import ReferenceDocument, SchemeOfWork, SchemeWeek
-from .serializers import ReferenceDocumentSerializer, SchemeOfWorkSerializer, SchemeGenerateSerializer, SchemeUploadSerializer
+from .serializers import ReferenceDocumentSerializer, SchemeOfWorkSerializer, SchemeWeekSerializer, SchemeGenerateSerializer, SchemeUploadSerializer
 import csv
 import os
 import re
@@ -113,6 +113,23 @@ class ReferenceDocumentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user, school=self.request.user.school)
+
+
+class SchemeWeekViewSet(viewsets.ModelViewSet):
+    queryset = SchemeWeek.objects.all()
+    serializer_class = SchemeWeekSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['scheme', 'week_number', 'strand', 'sub_strand', 'course', 'lesson']
+
+    def get_queryset(self):
+        user = self.request.user
+        return SchemeWeek.objects.filter(scheme__school=user.school)
+
+    def perform_update(self, serializer):
+        week = serializer.save()
+        week.refresh_from_db()
+        if week.course and week.sub_strand:
+            week.save()
 
 
 class SchemeOfWorkViewSet(viewsets.ModelViewSet):

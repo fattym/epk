@@ -1,0 +1,15 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"models.py" = ["RUF012"]
+"admin.py" = ["RUF012"]
+"views.py" = ["RUF012"]
+"serializers.py" = ["RUF012"]
+"settings.py" = ["RUF012"]
+"settings_production.py" = ["RUF012"]
+"migrations/*.py" = ["RUF012", "I001"]

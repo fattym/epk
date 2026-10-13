@@ -1,17 +1,28 @@
 from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema
 from django.db import transaction
-from academics.models import LearningOutcome, Term
+from academics.models import LearningOutcome, Term, LearningArea
 from accounts.models import User
 
-from .models import CompetencyAssessment, LearnerPortfolio, AssessmentEvidence, teacher_can_assess
+from .models import (
+    CompetencyAssessment,
+    LearnerPortfolio,
+    AssessmentEvidence,
+    AssessmentTask,
+    AssessmentTaskResult,
+    teacher_can_assess,
+)
+from accounts.models import ParentLearner
 from .serializers import (
     CompetencyAssessmentSerializer,
     LearnerPortfolioSerializer,
     AssessmentEvidenceSerializer,
+    AssessmentTaskSerializer,
+    AssessmentTaskResultSerializer,
 )
 
 
@@ -47,8 +58,54 @@ class CompetencyAssessmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'TEACHER':
-            return CompetencyAssessment.objects.filter(assessed_by=user, learner__school=user.school)
+            return CompetencyAssessment.objects.filter(
+                assessed_by=user, learner__school=user.school
+            ).select_related('learner', 'outcome__sub_strand__strand__learning_area', 'assessed_by', 'term')
+        if user.role == 'PARENT':
+            learner_ids = ParentLearner.objects.filter(parent=user).values_list('learner_id', flat=True)
+            return CompetencyAssessment.objects.filter(learner_id__in=learner_ids)
+        if user.role == 'STUDENT':
+            return CompetencyAssessment.objects.filter(learner=user)
         return CompetencyAssessment.objects.filter(learner__school=user.school)
+
+
+class AssessmentTaskViewSet(viewsets.ModelViewSet):
+    """Full CRUD for formative assessment tasks, school-scoped.
+
+    CREATE accepts a nested `results` list (`{learner, level_achieved, remark}`)
+    so the teacher can design a task and score learners in one request.
+    Teachers may only see/create tasks for learning areas at their school.
+    """
+    queryset = AssessmentTask.objects.none()
+    serializer_class = AssessmentTaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return AssessmentTask.objects.filter(
+            learning_area__school=user.school
+        ).select_related('learning_area', 'term').prefetch_related('results')
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['get', 'post'], url_path='student-result', permission_classes=[permissions.IsAuthenticated])
+    def student_result(self, request, pk=None):
+        """A learner reads/submits their own result for a published task (school-scoped, self only)."""
+        task = self.get_object()
+        user = request.user
+        if user.role != 'STUDENT':
+            return Response({'detail': 'Only learners may submit a result here.'}, status=403)
+
+        result, _ = AssessmentTaskResult.objects.get_or_create(task=task, learner=user)
+
+        if request.method == 'GET':
+            return Response(AssessmentTaskResultSerializer(result).data)
+
+        serializer = AssessmentTaskResultSerializer(result, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(task=task, learner=user)
+        return Response(serializer.data)
 
 
 class LearnerPortfolioViewSet(viewsets.ModelViewSet):

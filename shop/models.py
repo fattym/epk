@@ -25,7 +25,12 @@ class Product(models.Model):
         ('percentage', 'Percentage'),
         ('fixed', 'Fixed Amount'),
     )
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='products')
+    PRODUCT_TYPE_CHOICES = (
+        ('physical', 'Physical'),
+        ('digital', 'Digital'),
+        ('service', 'Service'),
+    )
+    school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -38,6 +43,22 @@ class Product(models.Model):
     markup_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_reseller_listing = models.BooleanField(default=False)
+    sku = models.CharField(max_length=60, blank=True)
+    brand = models.CharField(max_length=100, blank=True)
+    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPE_CHOICES, default='physical', blank=True)
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    low_stock_threshold = models.PositiveIntegerField(default=0)
+    backorders = models.BooleanField(default=False)
+    shipping_weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    shipping_length = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    shipping_width = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    shipping_height = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    tags = models.ManyToManyField('shop.Tag', blank=True, related_name='products')
+    learning_areas = models.ManyToManyField('academics.LearningArea', blank=True, related_name='shop_products')
+    institution_categories = models.JSONField(
+        default=list, blank=True,
+        help_text="e.g. ['Pre-Primary','Primary School','University','TVET / Vocational']",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -65,6 +86,8 @@ class Product(models.Model):
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
     label = models.CharField(max_length=50)
+    size = models.CharField(max_length=50, blank=True)
+    color = models.CharField(max_length=50, blank=True)
     stock_quantity = models.PositiveIntegerField(default=0)
     price_override = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
@@ -80,29 +103,82 @@ class ProductVariant(models.Model):
         return self.price_override if self.price_override is not None else self.product.price
 
 
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class ProductImage(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='shop/products/gallery/%Y/')
+    alt = models.CharField(max_length=120, blank=True)
+    is_primary = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f'Image for {self.product}'
+
+
 class Order(models.Model):
     STATUS_CHOICES = (
         ('pending_payment', 'Pending Payment'),
         ('paid', 'Paid'),
         ('ready_for_pickup', 'Ready for Pickup'),
         ('picked_up', 'Picked Up'),
+        ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
     )
-    parent = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='parent_orders')
-    learner = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='learner_orders')
+    FUND_STATUS_CHOICES = (
+        ('HELD', 'Held'),
+        ('RELEASED', 'Released'),
+        ('REFUNDED', 'Refunded'),
+    )
+    parent = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='parent_orders', null=True, blank=True, help_text='Null for guest (no-account) orders.')
+    learner = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='learner_orders', null=True, blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='orders')
+    delivery_name = models.CharField(max_length=200, blank=True, help_text='Guest delivery contact name.')
+    delivery_phone = models.CharField(max_length=20, blank=True, help_text='Guest delivery phone (also used for the M-Pesa STK push).')
+    delivery_address = models.TextField(blank=True)
+    delivery_county = models.CharField(max_length=100, blank=True)
+    delivery_notes = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_payment')
     pickup_code = models.CharField(max_length=8, unique=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    commission_earned = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+        help_text='Total commission credited to distributor(s) when this order is paid.')
     created_at = models.DateTimeField(auto_now_add=True)
     picked_up_at = models.DateTimeField(null=True, blank=True)
     picked_up_by_staff = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders_processed')
+    fund_status = models.CharField(max_length=10, choices=FUND_STATUS_CHOICES, default='HELD', help_text='Escrow state of the order funds. HELD until delivery is confirmed and an admin releases the funds to the distributor.')
+    released_at = models.DateTimeField(null=True, blank=True)
+    released_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='released_orders')
+    delivery_confirmed_at = models.DateTimeField(null=True, blank=True)
+    disputed = models.BooleanField(default=False)
+    dispute_reason = models.TextField(blank=True)
+    dispute_evidence = models.ImageField(upload_to='disputes/', blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
         return f'Order #{self.id} - {self.learner} - {self.school}'
+
+    def total_commission(self):
+        """Sum of per-item commissions owed to linked distributors."""
+        total = 0
+        for item in self.items.select_related('variant__product__linked_distributor_product__distributor').all():
+            product = item.variant.product
+            if product.linked_distributor_product and product.commission_amount is not None:
+                total += product.commission_amount * item.quantity
+        return total
 
 
 class OrderItem(models.Model):
@@ -134,5 +210,45 @@ class Payment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='initiated')
     confirmed_at = models.DateTimeField(null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        from django.utils import timezone
+        if self.status == 'confirmed' and not self.confirmed_at:
+            self.confirmed_at = timezone.now()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'Payment for Order #{self.order.id} - {self.method}'
+
+
+class FormSubmission(models.Model):
+    """Generic form submissions from the storefront (contact, onboarding, etc.).
+
+    Allows anonymous public submissions via the API; staff/admins can review
+    and manage them through the Django admin or REST API.
+    """
+    FORM_TYPE_CHOICES = (
+        ('contact', 'Contact'),
+        ('onboarding', 'Distributor Onboarding'),
+        ('find_school_list', 'Find My School List'),
+        ('upload_list', 'Upload My School List'),
+        ('track_order', 'Track Your Order'),
+        ('lead', 'Homepage Lead'),
+        ('demo', 'Demo Request'),
+    )
+    STATUS_CHOICES = (
+        ('new', 'New'),
+        ('reviewed', 'Reviewed'),
+        ('resolved', 'Resolved'),
+    )
+    form_type = models.CharField(max_length=50, choices=FORM_TYPE_CHOICES)
+    data = models.JSONField()
+    file = models.FileField(upload_to='form_submissions/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'FormSubmission #{self.id} - {self.get_form_type_display()}'

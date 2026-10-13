@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment
+from .models import ProductCategory, Product, ProductVariant, Order, OrderItem, Payment, FormSubmission
 
 
 @admin.register(ProductCategory)
@@ -42,3 +42,20 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ['order', 'method', 'amount', 'status', 'confirmed_at']
     list_filter = ['method', 'status']
     search_fields = ['order__id', 'mpesa_receipt_number']
+
+
+@admin.register(FormSubmission)
+class FormSubmissionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'form_type', 'status', 'created_at']
+    list_filter = ['form_type', 'status', 'created_at']
+    search_fields = ['data']
+    readonly_fields = ['id', 'form_type', 'data', 'file', 'created_at', 'updated_at']
+    actions = ['mark_reviewed', 'mark_resolved']
+
+    def mark_reviewed(self, request, queryset):
+        queryset.update(status='reviewed')
+    mark_reviewed.short_description = "Mark as reviewed"
+
+    def mark_resolved(self, request, queryset):
+        queryset.update(status='resolved')
+    mark_resolved.short_description = "Mark as resolved"
