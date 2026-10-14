@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from academics.models import LearningArea, Term
-from accounts.models import User, ParentLearner
+from accounts.models import ParentLearner, User
 from gradebook.models import LearningAreaScore, StudentBio
 
 from .serializers import LearnerReportSerializer, compute_aggregate
@@ -162,6 +162,11 @@ def update_learner_assessment(request, pk):
         )
 
     for field, value in updates.items():
+        if field in {"strand1", "strand2", "strand3", "csl_score"} and value not in (None, ""):
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                pass
         setattr(score, field, value)
     score.save()
 
