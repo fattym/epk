@@ -1,25 +1,52 @@
-from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from django.utils import timezone
-from django.db.models import Q
-from django.conf import settings
-from django.http import FileResponse, Http404
 import json
-import urllib.request
 import urllib.error
+import urllib.request
+
+from django.conf import settings
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from accounts.permissions import IsAdminOrStaffOrTeacher
+
 from .models import (
-    Grade, Pathway, Stream, LearningArea, TeacherAssignment, Timetable, Term,
-    Strand, SubStrand, LearningOutcome, RubricDescriptor, ClassTeacher, Enrollment, Assignment,
-    LearnerGroup, TimetableConfig, TimetableSlot
+    Assignment,
+    ClassTeacher,
+    Enrollment,
+    Grade,
+    LearnerGroup,
+    LearningArea,
+    LearningOutcome,
+    Pathway,
+    RubricDescriptor,
+    Strand,
+    Stream,
+    SubStrand,
+    TeacherAssignment,
+    Term,
+    Timetable,
+    TimetableConfig,
+    TimetableSlot,
 )
 from .serializers import (
-    GradeSerializer, PathwaySerializer, StreamSerializer, LearningAreaSerializer,
-    StrandSerializer, SubStrandSerializer, LearningOutcomeSerializer, RubricDescriptorSerializer,
-    TeacherAssignmentSerializer, ClassTeacherSerializer, EnrollmentSerializer,
-    TimetableSerializer, AssignmentSerializer, TermSerializer, LearnerGroupSerializer,
-    TimetableConfigSerializer, TimetableSlotSerializer
+    AssignmentSerializer,
+    ClassTeacherSerializer,
+    EnrollmentSerializer,
+    GradeSerializer,
+    LearnerGroupSerializer,
+    LearningAreaSerializer,
+    LearningOutcomeSerializer,
+    PathwaySerializer,
+    RubricDescriptorSerializer,
+    StrandSerializer,
+    StreamSerializer,
+    SubStrandSerializer,
+    TeacherAssignmentSerializer,
+    TermSerializer,
+    TimetableConfigSerializer,
+    TimetableSerializer,
+    TimetableSlotSerializer,
 )
 
 
@@ -46,23 +73,27 @@ class PathwayViewSet(viewsets.ModelViewSet):
 class StreamViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Stream.objects.all()
     serializer_class = StreamSerializer
+    permission_classes = [IsAdminOrStaffOrTeacher]
 
 
 class LearningAreaViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = LearningArea.objects.all()
     serializer_class = LearningAreaSerializer
+    permission_classes = [IsAdminOrStaffOrTeacher]
 
 
 class StrandViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Strand.objects.all()
     serializer_class = StrandSerializer
     school_filter_field = 'learning_area__school'
+    permission_classes = [IsAdminOrStaffOrTeacher]
 
 
 class SubStrandViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = SubStrand.objects.all()
     serializer_class = SubStrandSerializer
     school_filter_field = 'strand__learning_area__school'
+    permission_classes = [IsAdminOrStaffOrTeacher]
 
 
 class LearningOutcomeViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
@@ -113,11 +144,11 @@ class TeacherAssignmentViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
         user = request.user
         if user.role != 'TEACHER':
             return Response({'detail': 'Only teachers can access this.'}, status=403)
-            
+
         assignments = self.get_queryset().filter(teacher=user, is_active=True)
         stream_ids = assignments.values_list('stream_id', flat=True)
         enrollments = Enrollment.objects.filter(stream_id__in=stream_ids, is_active=True)
-        
+
         serializer = EnrollmentSerializer(enrollments, many=True)
         return Response(serializer.data)
 
@@ -152,7 +183,7 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
         """
         try:
             school = request.user.school
-            
+
             # Get or create TimetableConfig
             config, created = TimetableConfig.objects.get_or_create(
                 school=school,
@@ -168,26 +199,26 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                     'academic_year': '2024-2025',
                 }
             )
-            
+
             # Get all streams for this school
             streams = Stream.objects.filter(school=school)
-            
+
             if not streams.exists():
                 return Response({'message': 'No streams found for this school.'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             # Get all teacher assignments for this school
             teacher_assignments = TeacherAssignment.objects.filter(school=school, is_active=True)
-            
+
             if not teacher_assignments.exists():
                 return Response({'message': 'No teacher assignments found.'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             # Build day slots from config
             working_days = config.working_days or ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']
             breaks = config.breaks or []
             school_start = config.school_start_time
             school_end = config.school_end_time
             lecture_duration = config.lecture_duration_minutes
-            
+
             # Parse break times to minutes
             break_ranges = []
             for brk in breaks:
@@ -202,14 +233,14 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                     'start_time': brk_start,
                     'end_time': brk_end,
                 })
-            
+
             # Build day slots
             day_slots = []
             for day in working_days:
                 slots = []
                 current_minutes = school_start.hour * 60 + school_start.minute
                 end_minutes = school_end.hour * 60 + school_end.minute
-                
+
                 while current_minutes < end_minutes:
                     # Check if current time is within a break
                     active_break = None
@@ -217,7 +248,7 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                         if brk['start_min'] <= current_minutes < brk['end_min']:
                             active_break = brk
                             break
-                    
+
                     if active_break:
                         slots.append({
                             'type': 'break',
@@ -227,40 +258,40 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                         })
                         current_minutes = active_break['end_min']
                         continue
-                    
+
                     # Find next break start
                     next_break_start = None
                     for brk in break_ranges:
                         if brk['start_min'] > current_minutes:
                             if next_break_start is None or brk['start_min'] < next_break_start:
                                 next_break_start = brk['start_min']
-                    
+
                     if next_break_start is not None:
                         slot_end = min(next_break_start, end_minutes)
                     else:
                         slot_end = end_minutes
-                    
+
                     # Only add lecture slots with reasonable duration
                     if slot_end - current_minutes >= lecture_duration // 2:
                         start_h = current_minutes // 60
                         start_m = current_minutes % 60
                         end_h = slot_end // 60
                         end_m = slot_end % 60
-                        
+
                         slots.append({
                             'type': 'lecture',
                             'start_time': f"{start_h:02d}:{start_m:02d}",
                             'end_time': f"{end_h:02d}:{end_m:02d}",
                             'duration': slot_end - current_minutes,
                         })
-                    
+
                     current_minutes = slot_end
-                
+
                 day_slots.append({
                     'day': day,
                     'slots': slots
                 })
-            
+
             # Build class needs based on teacher assignments
             # Group by stream and subject
             class_needs = {}
@@ -268,15 +299,15 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                 stream = assignment.stream
                 learning_area = assignment.learning_area
                 teacher = assignment.teacher
-                
+
                 if stream and learning_area and teacher:
                     stream_id = stream.id
                     if stream_id not in class_needs:
                         class_needs[stream_id] = []
-                    
+
                     # Calculate weekly lectures needed (default 5 per week)
                     weekly_lectures = 5
-                    
+
                     class_needs[stream_id].append({
                         'stream_id': stream_id,
                         'stream': stream,
@@ -288,11 +319,11 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                         'remaining': weekly_lectures,
                         'weightage': 100,
                     })
-            
+
             # Sort needs by weightage
             for stream_id in class_needs:
                 class_needs[stream_id].sort(key=lambda x: x['weightage'], reverse=True)
-            
+
             # Track teacher busy slots
             num_slots = len(day_slots[0]['slots']) if day_slots and day_slots[0]['slots'] else 8
             teacher_busy = {}
@@ -303,7 +334,7 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                         teacher_busy[t_id] = {}
                         for day in working_days:
                             teacher_busy[t_id][day] = [False] * num_slots
-            
+
             # Generate timetable slots
             generated_slots = []
             for stream_id, needs in class_needs.items():
@@ -312,24 +343,24 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                     for slot_idx, slot_config in enumerate(day_config['slots']):
                         if slot_config['type'] == 'break':
                             continue
-                        
+
                         # Try to allocate from needs
                         allocated = False
                         for need in needs:
                             if need['remaining'] <= 0:
                                 continue
-                            
+
                             teacher_id = need['teacher_id']
-                            
+
                             # Check if teacher is free
                             if teacher_busy.get(teacher_id, {}).get(day, [False] * num_slots)[slot_idx]:
                                 continue
-                            
+
                             # Check daily burden (max 3 periods/day)
                             daily_load = sum(1 for b in teacher_busy.get(teacher_id, {}).get(day, []) if b)
                             if daily_load >= 3:
                                 continue
-                            
+
                             # Check consecutive burden (max 3 consecutive)
                             consecutive = 1
                             step = 1
@@ -340,10 +371,10 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                             while slot_idx + step < num_slots and teacher_busy.get(teacher_id, {}).get(day, [False] * num_slots)[slot_idx + step]:
                                 consecutive += 1
                                 step += 1
-                            
+
                             if consecutive > 3:
                                 continue
-                            
+
                             # Allocate this slot
                             generated_slots.append({
                                 'stream_id': stream_id,
@@ -355,13 +386,13 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                                 'end_time': slot_config['end_time'],
                                 'is_break': False,
                             })
-                            
+
                             # Mark teacher as busy
                             teacher_busy[teacher_id][day][slot_idx] = True
                             need['remaining'] -= 1
                             allocated = True
                             break
-                        
+
                         # Backfill if no standard allocation
                         if not allocated:
                             # Find any available teacher for this stream
@@ -371,7 +402,7 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                                 if not teacher_busy.get(teacher_id, {}).get(day, [False] * num_slots)[slot_idx]:
                                     if need['remaining'] > 0:
                                         available.append(need)
-                            
+
                             if available:
                                 # Sort by daily load (lowest first)
                                 available.sort(key=lambda x: sum(1 for b in teacher_busy.get(x['teacher_id'], {}).get(day, []) if b))
@@ -387,7 +418,7 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                                     'is_break': False,
                                 })
                                 teacher_busy[best['teacher_id']][day][slot_idx] = True
-            
+
             # Add break slots
             for stream in streams:
                 for day_idx, day_config in enumerate(day_slots):
@@ -405,10 +436,10 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                                 'is_break': True,
                                 'break_name': slot_config.get('break_name', 'Break'),
                             })
-            
+
             # Save to database
             TimetableSlot.objects.filter(school=school).delete()
-            
+
             created_count = 0
             for slot_data in generated_slots:
                 TimetableSlot.objects.create(
@@ -424,14 +455,14 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
                     room='',
                 )
                 created_count += 1
-            
+
             return Response({
                 'message': 'Timetable generated successfully!',
                 'slots_created': created_count,
                 'streams_processed': streams.count(),
                 'slots_per_day': len(day_slots[0]['slots']) if day_slots else 0
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -441,7 +472,7 @@ class TimetableViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
 class TimetableConfigViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = TimetableConfig.objects.all()
     serializer_class = TimetableConfigSerializer
-    
+
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
 
@@ -449,7 +480,7 @@ class TimetableConfigViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
 class TimetableSlotViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = TimetableSlot.objects.all()
     serializer_class = TimetableSlotSerializer
-    
+
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
 
@@ -532,7 +563,6 @@ class AITeacherAssistView(APIView):
         learning_area = context.get('learning_area_name', 'the learning area')
         grade = context.get('grade_name', 'the grade')
         outcomes = context.get('learning_outcomes', '')
-        week = context.get('week_number', '')
         prompt = f"I am a Kenyan CBC teacher planning a lesson for {learning_area} - {grade}. The sub-strand is '{sub_strand}'. Learning outcomes: {outcomes}. Please draft: 1) A Key Inquiry Question that stimulates critical thinking. 2) 3-4 Learning Experiences/activities aligned to CBC pedagogy (discovery, collaborative, practical). 3) A list of Learning Resources available in a typical Kenyan school. 4) An Assessment Method suitable for competency-based assessment."
         answer = self.call_external_ai([{'role': 'user', 'content': prompt}])
         if answer:
