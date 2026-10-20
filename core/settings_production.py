@@ -12,6 +12,8 @@ from datetime import timedelta
 
 from dotenv import load_dotenv
 
+AUTH_USER_MODEL = 'accounts.User'
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
@@ -84,11 +86,16 @@ INSTALLED_APPS = [
     'payroll',
     'transport',
     'gradebook',
-    'axes',
-    'guardian',
     'audit',
     'ai',
     'procurement',
+    'rest_framework.authtoken',
+    'dj_rest_auth',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'discovery',
+    'website',
 ]
 
 MIDDLEWARE = [
@@ -103,6 +110,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'tenants.middleware.TenantMiddleware',
     'audit.middleware.AuditMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
