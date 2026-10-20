@@ -5,8 +5,12 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.apps import apps
-from .models import User, ParentLearner, StudentProfile, TeacherLeave
-from .serializers import UserSerializer, UserCreateSerializer, ParentLearnerSerializer, TeacherLeaveSerializer
+from django.utils import timezone
+from django.conf import settings
+from datetime import timedelta
+from django.core.mail import send_mail
+from .models import User, ParentLearner, StudentProfile, TeacherLeave, PasswordReset
+from .serializers import UserSerializer, UserCreateSerializer, ParentLearnerSerializer, TeacherLeaveSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 from .permissions import IsAdminOrReadOnly
 
 
@@ -181,3 +185,60 @@ class TeacherLeaveViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.context.get('user')
+
+        if user is None:
+            return Response({'detail': 'If an account exists, a reset link has been sent.'})
+
+        # Invalidate any previous unused tokens for this user
+        PasswordReset.objects.filter(user=user, used=False).update(used=True)
+
+        token = PasswordReset.objects.create(
+            user=user,
+            token=PasswordReset.generate_token(),
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+        # In development, return the token so the flow can be tested without SMTP.
+        # In production this should only be delivered via email/SMS.
+        reset_link = f"/reset-password/{token.token}"
+        if getattr(settings, 'DEBUG', True):
+            send_mail(
+                'Password Reset',
+                f'Your reset link is: {reset_link}\nToken: {token.token}',
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=True,
+            )
+            return Response({
+                'detail': 'If an account exists, a reset link has been sent.',
+                'reset_link': reset_link,
+                'token': token.token,
+            })
+
+        send_mail(
+            'Password Reset',
+            f'Click here to reset your password: {reset_link}',
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=True,
+        )
+        return Response({'detail': 'If an account exists, a reset link has been sent.'})
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'detail': 'Password has been reset successfully.'})

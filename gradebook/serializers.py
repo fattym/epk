@@ -9,9 +9,13 @@ def compute_aggregate(strand1, strand2, strand3, csl_score):
     Mirrors the CBC formative formula used in
     cbc_gradebook_student_profile_system (2).html:
         aggregate = round((strandAvg/4)*80 + (csl/20)*20)
+
+    The aggregate is computed from the raw strand mean (not the rounded
+    display value) so the score matches the design spec exactly.
     """
-    strand_avg = round((strand1 + strand2 + strand3) / 3, 1)
-    agg = round((strand_avg / 4) * 80 + (csl_score / 20) * 20)
+    raw_avg = (strand1 + strand2 + strand3) / 3
+    strand_avg = round(raw_avg, 1)
+    agg = round((raw_avg / 4) * 80 + (csl_score / 20) * 20)
     return strand_avg, agg, aggregate_level(agg)
 
 

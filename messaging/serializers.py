@@ -62,7 +62,9 @@ class NotificationSerializer(serializers.ModelSerializer):
 class ConversationSerializer(serializers.ModelSerializer):
     participants = serializers.SerializerMethodField()
     is_group = serializers.BooleanField(read_only=True)
-    display_name = serializers.CharField(read_only=True)
+    display_name = serializers.SerializerMethodField()
+    other_user = serializers.SerializerMethodField()
+    participant_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
 
@@ -78,11 +80,42 @@ class ConversationSerializer(serializers.ModelSerializer):
             'created_at',
             'is_group',
             'display_name',
+            'other_user',
+            'participant_count',
             'participants',
             'last_message',
             'unread_count',
         ]
         read_only_fields = ['id', 'created_by', 'school', 'created_at']
+
+    def get_display_name(self, obj):
+        request = self.context.get('request')
+        current_user = request.user if request else None
+        if obj.is_group:
+            return obj.name or 'Group Chat'
+        if current_user:
+            other = obj.participants.exclude(user=current_user).select_related('user').first()
+            if other and other.user:
+                name = other.user.get_full_name() or other.user.email
+                if obj.name and '(re:' in obj.name:
+                    re_note = obj.name[obj.name.index('(re:'):]
+                    return f"{name} {re_note}"
+                return name
+        return obj.name or 'Direct Message'
+
+    def get_other_user(self, obj):
+        if obj.is_group:
+            return None
+        request = self.context.get('request')
+        if not request:
+            return None
+        other = obj.participants.exclude(user=request.user).select_related('user').first()
+        if other and other.user:
+            return UserMiniSerializer(other.user).data
+        return None
+
+    def get_participant_count(self, obj):
+        return obj.participants.count()
 
     def get_participants(self, obj):
         return UserMiniSerializer(

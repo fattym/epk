@@ -12,6 +12,8 @@ from datetime import timedelta
 
 from dotenv import load_dotenv
 
+AUTH_USER_MODEL = 'accounts.User'
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
@@ -84,6 +86,16 @@ INSTALLED_APPS = [
     'payroll',
     'transport',
     'gradebook',
+    'audit',
+    'ai',
+    'procurement',
+    'rest_framework.authtoken',
+    'dj_rest_auth',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'discovery',
+    'website',
 ]
 
 MIDDLEWARE = [
@@ -97,6 +109,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'tenants.middleware.TenantMiddleware',
+    'audit.middleware.AuditMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -130,118 +144,23 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
-]
+# Sentry error tracking
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.celery import CeleryIntegration
 
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Africa/Nairobi'
-USE_I18N = True
-USE_TZ = True
-
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-_frontend_dist = BASE_DIR.parent / 'frontend' / 'codingclubskenya' / 'dist'
-STATICFILES_DIRS = [str(_frontend_dist)] if _frontend_dist.exists() else []
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-AUTH_USER_MODEL = 'accounts.User'
-
-_cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '')
-if _cors_origins:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
-else:
-    CORS_ALLOWED_ORIGINS = [
-        'https://codingclubskenya.com',
-        'https://www.codingclubskenya.com',
-    ]
-
-CORS_ALLOW_CREDENTIALS = True
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ],
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-    ],
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-    ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/hour',
-    },
-}
-
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'School Management API',
-    'DESCRIPTION': 'Multi-tenant school management system API',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-}
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-}
-
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60
-CELERY_WORKER_PREFETCH_MULTIPLIER = 4
-
-# Redis Configuration
-_REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
-_REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
-_REDIS_DB_CACHE = os.environ.get('REDIS_DB_CACHE', '1')
-_REDIS_DB_SESSIONS = os.environ.get('REDIS_DB_SESSIONS', '2')
-_REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
-
-_redis_url = f'redis://:{_REDIS_PASSWORD}@{_REDIS_HOST}:{_REDIS_PORT}' if _REDIS_PASSWORD else f'redis://{_REDIS_HOST}:{_REDIS_PORT}'
-
-# Cache configuration using Redis
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': f'{_redis_url}/{_REDIS_DB_CACHE}',
-        'KEY_PREFIX': 'school_mgmt',
-        'TIMEOUT': 300,
-    },
-    'sessions': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': f'{_redis_url}/{_REDIS_DB_SESSIONS}',
-        'KEY_PREFIX': 'school_mgmt_sessions',
-        'TIMEOUT': 86400,
-    },
-}
-
-# Session configuration using Redis
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'sessions'
-SESSION_COOKIE_AGE = 86400
-SESSION_COOKIE_SECURE = True
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_SAVE_EVERY_REQUEST = False
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration(), CeleryIntegration()],
+            traces_sample_rate=0.1,
+            send_default_pii=False,
+            environment=os.environ.get('SENTRY_ENVIRONMENT', 'production'),
+        )
+    except ImportError:
+        pass
 
 # django-axes (brute-force protection)
 AXES_FAILURE_LIMIT = 5
