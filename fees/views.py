@@ -1,15 +1,16 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Sum
 from django.utils import timezone
 from .models import FeeStructure, Invoice, Payment
 from .serializers import FeeStructureSerializer, InvoiceSerializer, PaymentSerializer
+from accounts.permissions import IsAdminOrStaffOrReadOnly, IsAdminOrStaffOrReadOnlyOrOwner
 
 
 class FeeStructureViewSet(viewsets.ModelViewSet):
     serializer_class = FeeStructureSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrStaffOrReadOnly]
     queryset = FeeStructure.objects.none()
 
     def get_queryset(self):
@@ -21,17 +22,26 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     serializer_class = InvoiceSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrStaffOrReadOnlyOrOwner]
     queryset = Invoice.objects.none()
 
     def get_queryset(self):
-        return Invoice.objects.filter(school=self.request.user.school)
+        user = self.request.user
+        if user.role == 'STUDENT':
+            return Invoice.objects.filter(school=user.school, student=user)
+        if user.role == 'PARENT':
+            from accounts.models import ParentLearner
+            children = ParentLearner.objects.filter(parent=user).values_list('learner_id', flat=True)
+            return Invoice.objects.filter(school=user.school, student_id__in=children)
+        return Invoice.objects.filter(school=user.school)
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.user.school)
 
     @action(detail=False, methods=['get'])
     def defaulters(self, request):
+        if request.user.role not in ('ADMIN', 'STAFF'):
+            return Response({'detail': 'Only admins and staff can view defaulters.'}, status=status.HTTP_403_FORBIDDEN)
         today = timezone.now().date()
         invoices = self.get_queryset().filter(due_date__lt=today).exclude(status__in=['PAID', 'CANCELLED'])
         serializer = self.get_serializer(invoices, many=True)
@@ -39,6 +49,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def report(self, request):
+        if request.user.role not in ('ADMIN', 'STAFF'):
+            return Response({'detail': 'Only admins and staff can view fee reports.'}, status=status.HTTP_403_FORBIDDEN)
         qs = self.get_queryset()
         total_expected = qs.aggregate(Sum('amount'))['amount__sum'] or 0
         
@@ -56,13 +68,23 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
 class PaymentViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrStaffOrReadOnlyOrOwner]
     queryset = Payment.objects.none()
 
     def get_queryset(self):
-        return Payment.objects.filter(school=self.request.user.school)
+        user = self.request.user
+        if user.role == 'STUDENT':
+            return Payment.objects.filter(school=user.school, invoice__student=user)
+        if user.role == 'PARENT':
+            from accounts.models import ParentLearner
+            children = ParentLearner.objects.filter(parent=user).values_list('learner_id', flat=True)
+            return Payment.objects.filter(school=user.school, invoice__student_id__in=children)
+        return Payment.objects.filter(school=user.school)
 
     def perform_create(self, serializer):
+        if self.request.user.role not in ('ADMIN', 'STAFF'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only admins and staff can record payments.')
         payment = serializer.save(school=self.request.user.school, recorded_by=self.request.user)
         
         # Update Invoice Status

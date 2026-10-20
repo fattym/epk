@@ -1,9 +1,11 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from accounts.models import User, ParentLearner
+from accounts.permissions import IsAdminOrStaffOrTeacher
 from academics.models import TeacherAssignment, Enrollment
 from .models import AttendanceRecord, AttendanceSummary, AttendanceNotification
 from .serializers import AttendanceRecordSerializer, AttendanceSummarySerializer, AttendanceNotificationSerializer
@@ -11,7 +13,7 @@ from .serializers import AttendanceRecordSerializer, AttendanceSummarySerializer
 
 class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrStaffOrTeacher]
     queryset = AttendanceRecord.objects.none()
 
     def get_queryset(self):

@@ -2,11 +2,13 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.db.models import Sum, Count, DecimalField, F, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from .models import Exam, ExamGrade, ReportCard
 from .serializers import ExamSerializer, ExamGradeSerializer, ReportCardSerializer
 from accounts.models import ParentLearner, User
+from accounts.permissions import IsAdminOrStaffOrTeacher
 from academics.models import Term, Enrollment, Grade, LearningArea
 from assessment.models import CompetencyAssessment, LearnerPortfolio
 from homework.models import HomeworkSubmission
@@ -15,7 +17,7 @@ from homework.models import HomeworkSubmission
 class ExamViewSet(viewsets.ModelViewSet):
     queryset = Exam.objects.all()
     serializer_class = ExamSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrStaffOrTeacher]
     filterset_fields = ['exam_type', 'stream', 'learning_area', 'date', 'school']
     
     def get_queryset(self):
@@ -104,7 +106,7 @@ class ExamViewSet(viewsets.ModelViewSet):
 class ExamGradeViewSet(viewsets.ModelViewSet):
     queryset = ExamGrade.objects.all()
     serializer_class = ExamGradeSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrStaffOrTeacher]
     filterset_fields = ['student', 'exam', 'grade', 'school']
 
     def get_queryset(self):
@@ -208,7 +210,7 @@ class ExamGradeViewSet(viewsets.ModelViewSet):
 class ReportCardViewSet(viewsets.ModelViewSet):
     queryset = ReportCard.objects.all()
     serializer_class = ReportCardSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrStaffOrTeacher]
     filterset_fields = ['student', 'stream', 'term', 'school']
 
     def get_queryset(self):

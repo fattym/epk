@@ -147,6 +147,37 @@ class TeacherProfile(models.Model):
         return f"Teacher Profile: {self.user.email}"
 
 
+class PasswordReset(models.Model):
+    """Password reset tokens for users who forgot their password.
+
+    Tokens are single-use and expire after 1 hour.  In development the
+    token is returned in the API response so the flow can be tested
+    without an SMTP server; in production it should be delivered by
+    email/SMS only.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_resets')
+    token = models.CharField(max_length=100, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Password reset for {self.user.email}'
+
+    @property
+    def is_valid(self):
+        from django.utils import timezone
+        return not self.used and self.expires_at > timezone.now()
+
+    @classmethod
+    def generate_token(cls):
+        import secrets
+        return secrets.token_urlsafe(32)
+
+
 class TeacherLeave(models.Model):
     """Leave request for a teacher with approval workflow."""
     

@@ -18,7 +18,7 @@ from .serializers import (
     OrderSerializer, OrderCreateSerializer, GuestOrderCreateSerializer,
     OrderItemSerializer, PaymentSerializer, FormSubmissionSerializer,
 )
-from accounts.permissions import IsAdminOrReadOnly
+from accounts.permissions import IsAdminOrReadOnly, IsParentOrAdminOrStaff
 from fees.models import Invoice
 from distributor.models import DistributorProduct
 import uuid
@@ -48,7 +48,7 @@ def sync_distributor_categories(school):
 class ProductCategoryViewSet(viewsets.ModelViewSet):
     queryset = ProductCategory.objects.all()
     serializer_class = ProductCategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
@@ -68,7 +68,7 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
     filterset_fields = ['category', 'is_active', 'applicable_levels', 'is_reseller_listing']
 
     def get_queryset(self):
@@ -321,7 +321,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 class ProductVariantViewSet(viewsets.ModelViewSet):
     queryset = ProductVariant.objects.all()
     serializer_class = ProductVariantSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         return ProductVariant.objects.filter(product__school=self.request.user.school)
@@ -353,6 +353,11 @@ class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.IsAuthenticated(), IsParentOrAdminOrStaff()]
+        return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
         if self.action == 'create':

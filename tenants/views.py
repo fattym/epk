@@ -8,6 +8,12 @@ class SchoolViewSet(viewsets.ModelViewSet):
     serializer_class = SchoolSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return School.objects.all()
+        return School.objects.filter(id=user.school_id)
+
 
 class SchoolSettingsViewSet(viewsets.ModelViewSet):
     serializer_class = SchoolSettingsSerializer

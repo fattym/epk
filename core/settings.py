@@ -2,16 +2,24 @@
 Django settings for core project.
 """
 
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
+
+import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-1vq)2(_#6+=wx@jb0&(8m@0jm#n(c(r*9yscns4n#k-1hlomm5'
+env = environ.Env(
+    DEBUG=(bool, True),
+    DATABASE_URL=(str, 'sqlite:///db.sqlite3'),
+)
+environ.Env.read_env(BASE_DIR / '.env')
 
-DEBUG = True
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-1vq)2(_#6+=wx@jb0&(8m@0jm#n(c(r*9yscns4n#k-1hlomm5')
 
-ALLOWED_HOSTS = ['*']
+DEBUG = env('DEBUG', default=True)
+
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -20,12 +28,19 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     'rest_framework',
+    'rest_framework.authtoken',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     'drf_spectacular',
     'corsheaders',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    'dj_rest_auth',
     'tenants',
     'accounts',
     'academics',
@@ -54,6 +69,11 @@ INSTALLED_APPS = [
     'payroll',
     'transport',
     'gradebook',
+    'discovery',
+    'audit',
+    'ai',
+    'procurement',
+    'website',
 ]
 
 MIDDLEWARE = [
@@ -66,6 +86,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'tenants.middleware.TenantMiddleware',
+    'audit.middleware.AuditMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -88,10 +110,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': env.db('DATABASE_URL'),
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -114,10 +133,37 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'accounts.User'
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-]
+SITE_ID = 1
+
+CORS_ALLOWED_ORIGINS = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=['http://localhost:3000', 'http://localhost:5173'],
+)
+
+# django-allauth + dj-rest-auth Google OAuth configuration
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'provider_id': 'google',
+            'name': 'Google',
+            'client_id': env('GOOGLE_CLIENT_ID', default=''),
+            'secret': env('GOOGLE_CLIENT_SECRET', default=''),
+            'settings': {
+                'scope': ['openid', 'email', 'profile'],
+            },
+        },
+    },
+}
+
+SOCIALACCOUNT_LOGIN_REDIRECT_URI = 'http://localhost:3000/learningpack'
+SOCIALACCOUNT_QUERY_EMAIL = True
+REST_USE_JWT = True
+ACCOUNT_USER_MODEL = 'accounts.User'
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_ADAPTER = 'allauth.account.adapter.DefaultAccountAdapter'
+SOCIALACCOUNT_ADAPTER = 'allauth.socialaccount.adapter.DefaultSocialAccountAdapter'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -171,3 +217,15 @@ CHAMAGO_API_URL = 'https://api.chamago.co.ke'
 AI_ASSIST_API_URL = ''
 AI_ASSIST_API_KEY = ''
 AI_ASSIST_MODEL = 'claude-3-5-sonnet-20240620'
+
+# Email configuration
+# Development: console backend prints emails to stdout (no SMTP needed)
+# Production: set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+#             and configure EMAIL_HOST/PORT/USER/PASSWORD via .env
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@codingclubs.co.ke')
+EMAIL_HOST = env('EMAIL_HOST', default='localhost')
+EMAIL_PORT = env.int('EMAIL_PORT', default=25)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=False)

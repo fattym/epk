@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, ParentLearner, StudentProfile, TeacherProfile, TeacherLeave
+from .models import User, ParentLearner, StudentProfile, TeacherProfile, TeacherLeave, PasswordReset
 
 
 class StudentProfileSerializer(serializers.ModelSerializer):
@@ -117,4 +117,41 @@ class UserCreateSerializer(serializers.ModelSerializer):
             profile_data = teacher_profile_data or {}
             TeacherProfile.objects.create(user=user, school=user.school, **profile_data)
             
+        return user
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        try:
+            user = User.objects.get(email=value)
+            self.context['user'] = user
+        except User.DoesNotExist:
+            pass
+        return value
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=100)
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_token(self, value):
+        from django.utils import timezone
+        try:
+            reset = PasswordReset.objects.get(token=value)
+        except PasswordReset.DoesNotExist:
+            raise serializers.ValidationError('Invalid or expired reset token.')
+        if not reset.is_valid:
+            raise serializers.ValidationError('Invalid or expired reset token.')
+        self.context['reset'] = reset
+        return value
+
+    def save(self):
+        reset = self.context['reset']
+        user = reset.user
+        user.set_password(self.validated_data['password'])
+        user.save()
+        reset.used = True
+        reset.save()
         return user

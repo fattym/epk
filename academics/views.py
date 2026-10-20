@@ -8,7 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAdminOrStaffOrTeacher
+from accounts.permissions import IsAdminOrReadOnly, IsAdminOrStaffOrTeacher
 
 from .models import (
     Assignment,
@@ -61,13 +61,13 @@ class SchoolScopedViewSetMixin:
 class GradeViewSet(viewsets.ModelViewSet):
     queryset = Grade.objects.all()
     serializer_class = GradeSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class PathwayViewSet(viewsets.ModelViewSet):
     queryset = Pathway.objects.all()
     serializer_class = PathwaySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class StreamViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
@@ -79,7 +79,7 @@ class StreamViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
 class LearningAreaViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = LearningArea.objects.all()
     serializer_class = LearningAreaSerializer
-    permission_classes = [IsAdminOrStaffOrTeacher]
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class StrandViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
@@ -100,12 +100,14 @@ class LearningOutcomeViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = LearningOutcome.objects.all()
     serializer_class = LearningOutcomeSerializer
     school_filter_field = 'sub_strand__strand__learning_area__school'
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class RubricDescriptorViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = RubricDescriptor.objects.all()
     serializer_class = RubricDescriptorSerializer
     school_filter_field = 'outcome__sub_strand__strand__learning_area__school'
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class TeacherAssignmentViewSet(SchoolScopedViewSetMixin, viewsets.ModelViewSet):

@@ -93,3 +93,36 @@ class StreamRBACTests(APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 403)
+
+
+class GradeRBACTests(APITestCase):
+    def setUp(self):
+        self.school = make_school("GR")
+        self.admin = make_user("admin@gr.com", "ADMIN", self.school)
+        self.teacher = make_user("teacher@gr.com", "TEACHER", self.school)
+        self.student = make_user("student@gr.com", "STUDENT", self.school)
+        self.parent = make_user("parent@gr.com", "PARENT", self.school)
+
+    def test_unauthenticated_cannot_create_grade(self):
+        resp = self.client.post("/api/academics/grades/", {"name": "Test", "stage": "primary", "order": 1}, format="json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_student_cannot_create_grade(self):
+        self.client.force_authenticate(user=self.student)
+        resp = self.client.post("/api/academics/grades/", {"name": "Test", "stage": "primary", "order": 1}, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_parent_cannot_create_grade(self):
+        self.client.force_authenticate(user=self.parent)
+        resp = self.client.post("/api/academics/grades/", {"name": "Test", "stage": "primary", "order": 1}, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_teacher_cannot_create_grade(self):
+        self.client.force_authenticate(user=self.teacher)
+        resp = self.client.post("/api/academics/grades/", {"name": "Test", "stage": "primary", "order": 1}, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_can_create_grade(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post("/api/academics/grades/", {"name": "Test", "stage": "primary", "order": 1}, format="json")
+        self.assertEqual(resp.status_code, 201, resp.json())
